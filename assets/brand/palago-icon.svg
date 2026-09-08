@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="PalaGo">
+  <title>PalaGo</title>
+  <defs>
+    <clipPath id="badge">
+      <circle cx="256" cy="256" r="248" />
+    </clipPath>
+    <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC820" />
+      <stop offset="1" stop-color="#F5A417" />
+    </linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3FDCD0" />
+      <stop offset="1" stop-color="#1FBEB4" />
+    </linearGradient>
+    <linearGradient id="hill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7ACB77" />
+      <stop offset="1" stop-color="#3EA45C" />
+    </linearGradient>
+    <linearGradient id="ground" x1="0.15" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#0E6B3A" />
+      <stop offset="1" stop-color="#08512B" />
+    </linearGradient>
+    <linearGradient id="coach" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#33B45F" />
+      <stop offset="1" stop-color="#1B8C45" />
+    </linearGradient>
+  </defs>
+
+  <g clip-path="url(#badge)">
+    <!-- Deep green ground fills the badge; the sun and sea are laid over it. -->
+    <rect x="0" y="0" width="512" height="512" fill="url(#ground)" />
+
+    <!-- Sunset disc, upper right -->
+    <circle cx="336" cy="176" r="184" fill="url(#sun)" />
+
+    <!-- Distant islands sitting on the horizon -->
+    <path d="M300 296 q52 -74 104 -30 q30 26 62 20 l46 -10 v40 H300 Z" fill="url(#hill)" />
+    <path d="M392 292 q34 -46 72 -22 l48 30 v20 H392 Z" fill="#5FBA69" opacity="0.85" />
+
+    <!-- Sea -->
+    <path d="M300 316 H512 v104 H300 Z" fill="url(#sea)" />
+    <g fill="#FFFFFF" opacity="0.55">
+      <rect x="330" y="342" width="58" height="7" rx="3.5" />
+      <rect x="410" y="366" width="76" height="7" rx="3.5" />
+      <rect x="346" y="392" width="46" height="7" rx="3.5" />
+    </g>
+
+    <!-- Winding road. Kept inside the lower-left so it never crosses the sea. -->
+    <path d="M-30 486 q130 -78 268 -86 q92 -6 158 -34 v50 q-70 28 -156 34 q-138 10 -244 82 Z"
+          fill="#FFFFFF" opacity="0.94" />
+    <path d="M-10 508 q128 -64 262 -72 q88 -6 152 -32"
+          fill="none" stroke="#0E6B3A" stroke-width="10" stroke-linecap="round" stroke-dasharray="26 30" opacity="0.3" />
+
+    <!-- Coach -->
+    <g transform="translate(150 268)">
+      <rect x="0" y="18" width="264" height="112" rx="30" fill="#FFFFFF" />
+      <path d="M18 46 h150 v40 H18 a10 10 0 0 1 -10 -10 v-20 a10 10 0 0 1 10 -10 Z" fill="url(#coach)" />
+      <path d="M0 104 h264 v14 a24 24 0 0 1 -24 24 H24 a24 24 0 0 1 -24 -24 Z" fill="url(#coach)" />
+      <rect x="0" y="96" width="264" height="12" fill="#F5B800" />
+      <!-- Windscreen and side glass -->
+      <path d="M196 30 h30 a34 34 0 0 1 30 22 l6 18 h-66 Z" fill="#0E6B3A" opacity="0.9" />
+      <g fill="#0E6B3A" opacity="0.28">
+        <rect x="30" y="34" width="42" height="30" rx="8" />
+        <rect x="82" y="34" width="42" height="30" rx="8" />
+        <rect x="134" y="34" width="42" height="30" rx="8" />
+      </g>
+      <!-- Headlamp and wheels -->
+      <rect x="232" y="112" width="26" height="12" rx="6" fill="#F5B800" />
+      <circle cx="64" cy="140" r="24" fill="#0B5D33" />
+      <circle cx="64" cy="140" r="10" fill="#FFFFFF" />
+      <circle cx="206" cy="140" r="24" fill="#0B5D33" />
+      <circle cx="206" cy="140" r="10" fill="#FFFFFF" />
+    </g>
+
+    <!-- Palm -->
+    <g transform="translate(96 92)">
+      <path d="M74 26 q-14 96 -46 190 q-6 18 14 22 q16 4 20 -16 q22 -104 40 -192 Z" fill="#0B5D33" />
+      <g fill="#1C9A4C">
+        <path d="M78 30 q-72 -34 -108 12 q44 -18 72 4 q-46 4 -66 40 q40 -30 84 -22 Z" />
+        <path d="M84 24 q-24 -76 -92 -78 q42 26 46 62 q-30 -32 -74 -26 q52 12 74 54 Z" />
+        <path d="M88 26 q34 -70 106 -56 q-46 8 -62 42 q34 -22 74 -6 q-56 2 -86 40 Z" />
+        <path d="M92 34 q64 -20 96 30 q-40 -24 -74 -8 q40 10 56 48 q-38 -42 -84 -46 Z" />
+      </g>
+      <g fill="#0E7A3C">
+        <path d="M82 28 q-6 -54 44 -78 q-26 32 -22 62 q22 -30 62 -30 q-48 18 -62 54 Z" />
+      </g>
+      <circle cx="82" cy="30" r="11" fill="#0B5D33" />
+    </g>
+
+    <!-- Birds -->
+    <g fill="none" stroke="#0B5D33" stroke-width="9" stroke-linecap="round">
+      <path d="M356 122 q16 -16 32 0" />
+      <path d="M392 96 q14 -14 28 0" />
+      <path d="M404 146 q13 -13 26 0" />
+    </g>
+  </g>
+</svg>

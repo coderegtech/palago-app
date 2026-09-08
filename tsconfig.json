@@ -1,7 +1,11 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
+    // Do not set "jsx" here. expo/tsconfig.base sets "react-jsx" (the automatic
+    // runtime), which SDK 57 and NativeWind's jsxImportSource both require.
+    // Overriding it with "react" makes every .tsx file demand React in scope.
     "strict": true,
+    "types": ["jest"],
     "paths": {
       "@/*": [
         "./src/*"
@@ -15,6 +19,7 @@
     "**/*.ts",
     "**/*.tsx",
     ".expo/types/**/*.ts",
-    "expo-env.d.ts"
+    "expo-env.d.ts",
+    "nativewind-env.d.ts"
   ]
 }

@@ -30,11 +30,20 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# local env files — never commit real Supabase URLs/keys. Use .env.example.
+.env
+.env.*
+!.env.example
 
 # typescript
 *.tsbuildinfo
+
+# supabase local stack
+supabase/.temp/
+supabase/.branches/
+
+# testing
+coverage/
 
 example
 
