@@ -29,9 +29,9 @@ user scans with any phone → opens /payment/PAY-2026-000001 in a browser
         ↓
 get-payment               returns a SAFE summary (no private fields)
         ↓
-page shows "TEST PAYMENT — no real money will be charged"
+page shows the booking and the amount due
         ↓
-CONFIRM TEST PAYMENT → confirm-test-payment (Edge Function, never a direct table write)
+CONFIRM PAYMENT → confirm-test-payment (Edge Function, never a direct table write)
         ↓
 payment = PAID · receipt RCP-2026-000001 · booking = CONFIRMED · seats confirmed
         ↓
@@ -91,3 +91,41 @@ Nothing in the booking funnel, seat reservation, receipts, QR, or operator scann
 
 Note that `src/lib/env.ts` currently *rejects* any provider other than `mock`. That guard is
 deliberate and should only be relaxed as part of deliberately adding a real provider.
+
+## Paying from the mock wallet (Phase 9)
+
+A second way to pay, added in Phase 9 and deliberately landing in the same place as the first.
+
+`pay_booking_with_wallet(booking_id)` is SECURITY DEFINER and repeats every precondition
+`confirm_test_payment` applies: the booking must be the caller's, PAYMENT_PENDING and unexpired, and
+the amount is **re-derived from the booking** — the request carries a booking id and nothing else, so
+there is no shape in which a client names a price.
+
+It then does what the QR path does: inserts a PAID `payments` row (provider MOCK), issues a receipt
+with `payment_method = 'PalaGo Wallet'`, debits the wallet through the ledger, moves the booking to
+CONFIRMED and the seats to BOOKED, and writes the payment transaction, audit entry and notification.
+Downstream — the boarding pass, the operator manifest, the revenue totals — cannot tell the two
+apart, and must not: a passenger who paid is a passenger who paid.
+
+Any PENDING QR payment for the booking is cancelled first, so one booking is never paid twice.
+
+Refunds return to the wallet when the ledger shows the payment came from one. That is recognised by
+the presence of a `BOOKING_PAYMENT` ledger row for the payment, not by a flag, so there is a single
+source of truth; the partial unique index on `(payment_id, type)` makes the credit-back idempotent.
+
+Every centavo remains test money. `payments.provider` is still constrained to MOCK.
+
+## A note on the removed test notices
+
+The UI used to carry TEST PAYMENT / TEST DATA / TEST RECEIPT banners on every screen that showed a
+peso figure, and the database stored matching wording (`payment_method = 'TEST PAYMENT'`, a wallet
+ledger description of "Test top-up - no real money received", notification titles like "Test payment
+confirmed"). All of that was removed on request in favour of neutral wording.
+
+**Nothing about the payment system changed.** `payments.provider` is still constrained to `MOCK` by
+`payments_mock_only`, and `src/lib/env.ts` still refuses to start with any other provider. No money
+moves and none can.
+
+What did change is that a receipt or a balance from this build is now visually indistinguishable
+from a real one. If a real provider is ever added, the switch has to be a deliberate decision — the
+on-screen labels are no longer there to make the mock obvious to whoever is looking at it.

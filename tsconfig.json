@@ -15,6 +15,20 @@
       ]
     }
   },
+  "exclude": [
+    "node_modules",
+    "dist",
+    ".expo",
+    "babel.config.js",
+    "metro.config.js",
+    "jest.config.js",
+    "android",
+    "ios",
+    // Edge Functions are Deno, not React Native: they use jsr: specifiers,
+    // .ts import extensions and the Deno global, none of which are valid in
+    // this project. They are type-checked by the Supabase CLI / `deno check`.
+    "supabase/functions"
+  ],
   "include": [
     "**/*.ts",
     "**/*.tsx",

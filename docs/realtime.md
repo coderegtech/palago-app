@@ -1,9 +1,9 @@
 # Realtime
 
-## Status: not yet implemented
+## Status
 
-Payment/booking status subscriptions arrive in Phase 5; trip tracking in Phase 8; notifications in
-Phase 12.
+Payment and booking status subscriptions (Phase 5) and trip tracking (Phase 8) are implemented.
+Notifications arrive in Phase 12; seat-availability subscriptions are not built.
 
 ## Where Realtime is used
 
@@ -28,12 +28,41 @@ Phase 12.
 
 ## Driver location
 
-`expo-location` publishes to `bus_locations` every 10 seconds
-(`LOCATION_UPDATE_INTERVAL_MS`), adjustable for battery and network conditions. A driver may write
-only for the trip assigned to them — enforced by RLS, not by the app.
+`expo-location` publishes to `bus_locations` every 10 seconds (`LOCATION_UPDATE_INTERVAL_MS`) and
+at least 25 metres apart (`LOCATION_DISTANCE_INTERVAL_M`) — a bus queueing at a terminal should not
+spend battery re-sending the same coordinate. A driver may write only for a trip assigned to them,
+on an ACTIVE assignment, while the trip is BOARDING, DEPARTED or ON_TRIP — enforced by RLS, not by
+the app, and proved by `pnpm db:verify:tracking`.
 
-Passenger-side states that must be handled: permission denied, location services off, no GPS fix,
-and stale data (last known position with its timestamp, rather than a silently frozen marker).
+**The insert is a direct table write, not an Edge Function.** It is the one privileged-looking
+operation in PalaGo that is not, because there is no secret to hold and no cross-row invariant to
+maintain — only "is this caller the assigned driver", which is exactly what a policy expresses.
+Trip *status* is a different matter and goes through `start_trip` / `set_trip_boarding` /
+`end_trip`, which are SECURITY DEFINER.
+
+`driver_id` is defaulted from `current_driver_id()`, so the client never names a driver.
+
+**The trail is append-only.** No client may UPDATE or DELETE `bus_locations` — not the driver who
+wrote a row, not the operator who owns the bus. A trail that can be rewritten is not evidence of
+when a bus actually left, and `trips.actual_departure_at` is what the operator's on-time figure is
+computed from.
+
+**Foreground only.** `isAndroidBackgroundLocationEnabled` is false: publishing runs while the trip
+screen is open and stops when the app closes. Background location needs its own Play Store
+declaration and would mean tracking a driver between trips.
+
+States that must be handled, and are, each with its own wording: permission denied, location
+services off, no GPS fix yet, patchy connection (some pings lost), repeated publish failures, and a
+stale last-known position shown with its age rather than as a silently frozen marker.
+`LOCATION_STALE_AFTER_MS` is six intervals — long enough to ride out a tunnel, short enough not to
+mislead.
+
+## No estimated arrival
+
+PalaGo does not predict arrival times. Straight-line distance over an average speed is wrong on the
+Puerto Princesa–El Nido road, and a passenger who misses a connection because the app guessed is
+worse off than one who was told nothing. The tracking screen shows the operator's scheduled arrival
+and says why there is no estimate.
 
 ## Maps — MapLibre
 
@@ -71,6 +100,7 @@ before Phase 8:
 `followCenter` drives the camera from `center` so it eases to each new position; without it the
 camera only sets the opening view and then belongs to the user.
 
-**Status: the component is written and typechecks against the MapLibre v11 API, but has not been
-run on a device** — that requires a development build, which Phase 8 does. Treat the first Phase 8
-task as building and confirming it on hardware before layering tracking on top.
+**Status: still not run on a device.** The component typechecks against the MapLibre v11 API and is
+used by both the crew trip screen and the passenger tracking screen, but rendering it needs
+`npx expo run:android`, which has not been done. Everything behind the map — the data, the
+authorisation, the Realtime updates, the degraded states — is verified; the map itself is not.

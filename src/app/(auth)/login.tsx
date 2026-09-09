@@ -1,20 +1,20 @@
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Link, router } from 'expo-router';
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
-import { Eye, EyeOff } from 'lucide-react-native';
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Link, router } from "expo-router";
+import { Eye, EyeOff } from "lucide-react-native";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { KeyboardAvoidingView, Platform, Pressable, View } from "react-native";
 
-import { BrandHero } from '@/components/common/brand-hero';
-import { FormInput } from '@/components/common/form-input';
-import { Alert } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { Screen } from '@/components/ui/screen';
-import { Text } from '@/components/ui/text';
-import { Colors } from '@/constants/theme';
-import { useSignIn } from '@/hooks/use-auth-mutations';
-import { AppError } from '@/lib/errors';
-import { loginSchema, type LoginInput } from '@/schemas/auth';
+import { BrandHero } from "@/components/common/brand-hero";
+import { FormInput } from "@/components/common/form-input";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Screen } from "@/components/ui/screen";
+import { Text } from "@/components/ui/text";
+import { Colors } from "@/constants/theme";
+import { useSignIn } from "@/hooks/use-auth-mutations";
+import { AppError } from "@/lib/errors";
+import { loginSchema, type LoginInput } from "@/schemas/auth";
 
 export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
@@ -22,32 +22,42 @@ export default function LoginScreen() {
 
   const { control, handleSubmit } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { email: "", password: "" },
   });
 
   const onSubmit = handleSubmit((values) => {
     signIn.mutate(values, {
       // The root layout's index route sends the user on to the right home once
       // the session lands, so this only has to leave the auth stack.
-      onSuccess: () => router.replace('/'),
+      onSuccess: () => router.replace("/"),
     });
   });
 
   const errorMessage = signIn.error
     ? signIn.error instanceof AppError
       ? signIn.error.message
-      : 'Could not sign you in. Please try again.'
+      : "Could not sign you in. Please try again."
     : null;
 
   return (
     <Screen scroll>
-      <BrandHero title="Welcome back" subtitle="Sign in to book your next trip." />
+      <BrandHero
+        title="Welcome back"
+        subtitle="Sign in to book your next trip."
+        size="xl"
+      />
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        className="pt-8">
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        className="pt-8"
+      >
         {errorMessage ? (
-          <Alert tone="danger" title="Sign in failed" message={errorMessage} className="mb-4" />
+          <Alert
+            tone="danger"
+            title="Sign in failed"
+            message={errorMessage}
+            className="mb-4"
+          />
         ) : null}
 
         <View className="gap-4">
@@ -76,9 +86,12 @@ export default function LoginScreen() {
             trailing={
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                accessibilityLabel={
+                  showPassword ? "Hide password" : "Show password"
+                }
                 hitSlop={12}
-                onPress={() => setShowPassword((current) => !current)}>
+                onPress={() => setShowPassword((current) => !current)}
+              >
                 {showPassword ? (
                   <EyeOff size={18} color={Colors.textMuted} />
                 ) : (
@@ -109,7 +122,11 @@ export default function LoginScreen() {
             New to PalaGo?
           </Text>
           <Link href="/(auth)/register" asChild>
-            <Pressable accessibilityRole="link" accessibilityLabel="Create an account" hitSlop={8}>
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel="Create an account"
+              hitSlop={8}
+            >
               <Text variant="bodyStrong" tone="primary">
                 Create an account
               </Text>

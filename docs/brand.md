@@ -40,36 +40,38 @@ Everything else is flat. If a third gradient seems necessary, it probably isn't.
 
 ## The mark
 
-`assets/brand/palago-icon.svg` is the single source of truth: a palm, sunset, coach and winding road
-inside a deep-green circle, with the sea and islands to the right.
-
-It exists in two forms that must be kept in step:
+`assets/images/icon.png` — the original brand illustration on a transparent ground: a palm, sunset,
+coach and winding road, with the sea and islands to the right — is the source of truth for the mark.
 
 | Form | File | Used for |
 |---|---|---|
-| SVG | `assets/brand/palago-icon.svg` | Source for rasterising app icons |
-| React | `src/components/common/palago-mark.tsx` | In-app rendering, via `react-native-svg` |
+| Raster | `assets/images/icon.png` | In-app rendering (`PalaGoMark`, via `expo-image`), the app icon, and the base for `splash-icon.png` / `favicon.png` / the Android adaptive layers |
+| SVG | `assets/brand/palago-icon.svg` | A traced vector recreation, kept for `generate-icons.mjs` to fall back to if the raster art isn't present |
 
-The in-app mark is vector rather than a bitmap so it stays sharp from a 24px header to the splash
-screen and costs no image decode at first paint.
+`PalaGoMark` renders `icon.png` directly through an `expo-image` `Image` rather than redrawing the
+artwork as SVG paths, so the in-app mark is pixel-identical to the shipped app icon and splash
+screen.
 
 ### App icons
 
-Generated, never hand-edited:
+`icon.png`, `splash-icon.png`, `favicon.png`, and the three Android adaptive layers in
+`assets/images/` are derived from the same source art. To regenerate them (e.g. after a redesign),
+drop the new art in as `assets/brand/palago-icon-source.png` (square, ideally 1024px or larger,
+transparent background) and run:
 
 ```bash
 node scripts/generate-icons.mjs
 ```
 
-This writes `icon.png`, `splash-icon.png`, `favicon.png`, and the three Android adaptive layers into
-`assets/images/`. The adaptive foreground insets the art to ~62% because launchers crop adaptive
-icons to a circle or squircle — art drawn to the full bounds loses the palm and the coach.
+The adaptive foreground insets the art to ~62% because launchers crop adaptive icons to a circle or
+squircle — art drawn to the full bounds loses the palm and the coach. Never hand-edit the generated
+PNGs.
 
-> **Swapping in the original raster art.** The current mark is a vector *recreation* of the supplied
-> brand illustration. To use the original instead, drop it in as
-> `assets/brand/palago-icon-source.png` (square, ideally 1024px or larger, transparent background)
-> and re-run the script — it prefers that file automatically. The in-app `PalaGoMark` would then be
-> replaced with an `Image`, or the SVG redrawn to match.
+`assets/images/palago.png` is the full horizontal lockup (mark, wordmark and tagline baked into one
+flattened image on an opaque white ground). It isn't used in-app — `PalaGoLogo` composes the mark
+with a real-text wordmark instead so it can render inverse on `BrandHero`'s green gradient, which a
+white-background flattened image can't do. Reach for `palago.png` outside the app shell: store
+listings, the README, marketing pages.
 
 ## The lockup
 

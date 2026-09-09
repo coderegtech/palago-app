@@ -20,6 +20,11 @@ export const ErrorCode = {
   ALREADY_BOARDED: 'ALREADY_BOARDED',
   WRONG_TRIP: 'WRONG_TRIP',
   UNPAID_BOOKING: 'UNPAID_BOOKING',
+  INVALID_TRIP_STATUS: 'INVALID_TRIP_STATUS',
+  INSUFFICIENT_FUNDS: 'INSUFFICIENT_FUNDS',
+  WALLET_LIMIT_EXCEEDED: 'WALLET_LIMIT_EXCEEDED',
+  INSUFFICIENT_POINTS: 'INSUFFICIENT_POINTS',
+  REWARD_ALREADY_APPLIED: 'REWARD_ALREADY_APPLIED',
   NETWORK_ERROR: 'NETWORK_ERROR',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;
@@ -41,6 +46,11 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   ALREADY_BOARDED: 'This passenger has already boarded.',
   WRONG_TRIP: 'This ticket is for a different trip.',
   UNPAID_BOOKING: 'This booking has not been paid for.',
+  INVALID_TRIP_STATUS: 'This trip is not at a stage where that is possible.',
+  INSUFFICIENT_FUNDS: 'Your wallet does not have enough for this booking.',
+  WALLET_LIMIT_EXCEEDED: 'That would take your wallet over its limit.',
+  INSUFFICIENT_POINTS: 'You do not have enough points for that reward yet.',
+  REWARD_ALREADY_APPLIED: 'A reward is already applied to this booking.',
   NETWORK_ERROR: 'No internet connection. Please try again.',
   INTERNAL_ERROR: 'Something went wrong on our end. Please try again.',
 };

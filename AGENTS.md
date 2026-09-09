@@ -10,8 +10,14 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
 ## Non-negotiables
 
 - **Mock payment only.** No Stripe, GCash, Maya, card or bank integration. `src/lib/env.ts` rejects
-  any payment provider other than `mock`; that guard stays until a real provider is deliberately
-  added. Every peso figure is test data and must be labelled as such in the UI.
+  any payment provider other than `mock` and `payments.provider` is constrained to `MOCK` by the
+  database; **both guards stay** until a real provider is deliberately added.
+- **The test-mode UI notices were removed on request.** The banners that used to say TEST PAYMENT /
+  TEST DATA / TEST RECEIPT are gone from every screen, along with `TEST_MODE_LABEL` and
+  `TEST_PAYMENT_WARNING`. Do not reinstate them without being asked. Be aware of what this means:
+  the build still charges nothing real, but nothing on screen says so, so a receipt or a balance in
+  this app is now visually indistinguishable from a real one. Anything that would move actual money
+  needs a deliberate decision, not an assumption that the labels are still there to catch it.
 - **The server is the source of truth.** The client never decides a price, a payment status, a
   booking status, a loyalty balance, or whether someone boarded. Privileged operations go through
   Edge Functions, never direct table writes.
@@ -20,7 +26,8 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
   which says which phase will implement them.
 - **RLS is never disabled** to make frontend work easier.
 - **Phases are sequential.** Do not start a phase until the previous one passes `pnpm check` and its
-  browser verification.
+  browser verification. The full process — gate checklist, per-phase scope and setup, invariants and
+  the deviations log — is in [docs/phases.md](docs/phases.md). Read it before starting a phase.
 
 ## Conventions
 
@@ -57,6 +64,26 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
 - **`src/types/database.ts` is generated.** Run `pnpm db:types` after a migration; never hand-edit.
 - **`trip_seats` has no client write policy, deliberately.** Seat state changes only inside
   SECURITY DEFINER functions that can lock rows. A client able to UPDATE it could double-book.
+- **The operator console must read `operator_*` views, never `trips` or `buses` directly.** Both
+  tables are readable by every signed-in user because trip search needs them, so RLS does not
+  separate operators. The filter lives inside `operator_trip_overview`, `operator_manifest` and
+  `operator_fleet`. Reading a base table leaked a rival's coaches to the Cherry fleet screen.
+- **`bus_locations` is append-only and its insert is a direct table write.** That is the one
+  deliberate exception to "privileged operations go through Edge Functions" — a GPS ping has no
+  secret and no cross-row invariant, only "is this the assigned driver", which RLS expresses
+  exactly. No client may UPDATE or DELETE it. Trip *status* is not an exception: it goes through
+  `start_trip` / `set_trip_boarding` / `end_trip`.
+- **Crew authorisation must not depend on an assignment still being live.** `end_trip` sets the
+  assignment to COMPLETED; checking for ASSIGNED/ACTIVE made `end_trip` non-idempotent in practice
+  (the guard raised FORBIDDEN before the "already ended" branch could return) and 404'd the driver's
+  own trip screen the moment they ended it. Ask "were you the crew", not "are you still on duty".
+- **The wallet balance and its ledger are written together or not at all.** `wallets` and
+  `wallet_transactions` have no client INSERT/UPDATE/DELETE policy; everything goes through
+  `top_up_wallet` / `pay_booking_with_wallet` / `refund_test_payment`, which hold the wallet row
+  lock. Ledger amounts are **signed**, so `sum(amount) = balance` is the invariant to check.
+- **A wallet payment must produce a real `payments` row and receipt.** The boarding pass, the
+  operator manifest and the revenue totals all read those; a wallet payment that only moved a
+  balance would leave a passenger who paid looking unpaid at the door.
 - **Run `pnpm db:verify` after any migration touching a policy** — 31 RLS checks against real
   signed-in roles. Unit tests cannot cover RLS.
 - **Do not set `"jsx"` in tsconfig.json.** `expo/tsconfig.base` sets `react-jsx`; overriding it with

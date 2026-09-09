@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { View } from 'react-native';
 import { ChevronLeft } from 'lucide-react-native';
 
@@ -12,18 +12,38 @@ export interface HeaderProps {
   subtitle?: string;
   showBack?: boolean;
   onBack?: () => void;
+  /**
+   * Where to go when there is no navigation history — a deep link, a reload, or
+   * a `replace` that wiped the stack. Without this, `router.back()` throws
+   * "The action 'GO_BACK' was not handled by any navigator".
+   */
+  fallbackHref?: Href;
   /** Trailing controls, e.g. a notification bell. */
   right?: React.ReactNode;
   className?: string;
 }
 
-export function Header({ title, subtitle, showBack, onBack, right, className }: HeaderProps) {
+export function Header({
+  title,
+  subtitle,
+  showBack,
+  onBack,
+  fallbackHref = '/',
+  right,
+  className,
+}: HeaderProps) {
+  function goBack() {
+    // Someone who opened this screen from a link has no stack to pop.
+    if (router.canGoBack()) router.back();
+    else router.replace(fallbackHref);
+  }
+
   return (
     <View className={cn('flex-row items-center gap-2 py-3', className)}>
       {showBack ? (
         <IconButton
           accessibilityLabel="Go back"
-          onPress={onBack ?? (() => router.back())}
+          onPress={onBack ?? goBack}
           className="-ml-2">
           <ChevronLeft size={24} color={Colors.text} />
         </IconButton>
