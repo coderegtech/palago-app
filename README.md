@@ -16,9 +16,11 @@ public test-payment page, built on Expo and Supabase.
 
 ## Status
 
-**Phase 3 of 15 — database foundation.** Working auth and roles, plus the full reference schema:
-operators, terminals, routes, buses, seat layouts, trips with automatic seat inventory, and crew —
-all under Row Level Security, with seed data and an RLS verification suite. Screens beyond that
+**Phase 6 of 15 — boarding.** The complete booking-to-paid journey works: trip search, a visual
+seat map, atomic seat reservation proven under concurrent contention, a payment QR, a public
+test-payment page, server-side confirmation with receipts, Realtime status so the app notices a
+payment confirmed on another device, and a signed boarding pass that an operator can scan — issued
+only after payment, and usable exactly once. Screens beyond that
 render a clearly-labelled placeholder naming the phase that will implement them; nothing is faked
 as working.
 
@@ -27,13 +29,13 @@ as working.
 | 1 | Foundation: Expo, NativeWind, UI primitives, theme, Supabase client, env, navigation | **Done** |
 | 2 | Authentication, profiles, roles, route guards | **Done** |
 | 3 | Reference schema, trips, seat inventory, crew, RLS, seed data | **Done** |
-| 4 | Trip search, seat reservation, booking | Not started |
-| 5 | Mock payment, payment QR, web payment page, receipts | Not started |
-| 6 | Boarding QR generation and server-side validation | Not started |
-| 7 | Operator app | Not started |
-| 8 | Realtime trip tracking | Not started |
-| 9 | Wallet | Not started |
-| 10 | Loyalty | Not started |
+| 4 | Trip search, seat reservation, booking | **Done** |
+| 5 | Mock payment, payment QR, web payment page, receipts | **Done** |
+| 6 | Boarding QR generation and server-side validation | **Done** |
+| 7 | Operator app — dashboard, travel data, manifest, crew, fleet | **Done** |
+| 8 | Realtime trip tracking | Next |
+| 9 | Mock wallet, test top-ups, paying a booking from balance | **Done** |
+| 10 | Loyalty | Next |
 | 11 | SOS | Not started |
 | 12 | Notifications | Not started |
 | 13 | Security review | Not started |
@@ -132,8 +134,14 @@ RLS lives in Postgres and no unit test can cover it, so policies have their own 
 any migration that touches one:
 
 ```bash
-pnpm db:verify
+pnpm db:verify:all
 ```
+
+31 RLS, 38 booking, 49 payment, 38 boarding, 34 operator, 52 tracking and 51 wallet checks —
+including eight simultaneous callers racing for one seat, confirming a payment five times to prove
+one receipt, six simultaneous scans to prove a ticket boards once, one operator trying to read a
+rival's manifest, revenue and fleet, a driver trying to rewrite the GPS trail they published, and
+eight concurrent top-ups to prove no centavo is lost.
 
 ## Project structure
 
@@ -155,7 +163,7 @@ src/
 supabase/
   migrations/     SQL migrations
   functions/      Edge Functions (Phase 5+)
-docs/             Architecture, auth, database, payment, QR, realtime, security, testing
+docs/             Architecture, auth, database, payment, QR, realtime, security, test accounts, testing
 ```
 
 After changing a migration, regenerate the database types — never hand-edit them:
@@ -177,7 +185,9 @@ decided by the server and never accepted from the client. See [docs/security.md]
 - [brand.md](docs/brand.md)
 - [database.md](docs/database.md)
 - [payment-flow.md](docs/payment-flow.md)
+- [phases.md](docs/phases.md) — the phased build process, gates and invariants
 - [qr-flow.md](docs/qr-flow.md)
 - [realtime.md](docs/realtime.md)
 - [security.md](docs/security.md)
+- [test-accounts.md](docs/test-accounts.md) — seeded sign-in credentials for local testing
 - [testing.md](docs/testing.md)

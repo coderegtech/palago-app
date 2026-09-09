@@ -7,19 +7,22 @@ import { useAuth } from '@/hooks/use-auth';
 /**
  * Where each role lands after signing in.
  *
- * DRIVER and ASSISTANT have no dedicated area yet (Phases 7-8), so they are
- * routed to the passenger app rather than into an operator console they are not
- * authorised for. In practice nobody holds those roles yet: roles can only be
- * assigned administratively with the service role.
+ * ADMIN goes to the passenger app deliberately: an admin is not tied to an
+ * operator, so the operator console has nothing to total for them. A dedicated
+ * admin dashboard is out of scope for this build.
+ *
+ * Roles can only be assigned administratively with the service role — nobody
+ * self-selects into DRIVER by signing up.
  */
 export function homeRouteForRole(role: UserRole | undefined): Href {
   switch (role) {
     case UserRole.OPERATOR:
       return '/(operator)/dashboard';
-    case UserRole.USER:
-    case UserRole.ADMIN:
     case UserRole.DRIVER:
     case UserRole.ASSISTANT:
+      return '/(driver)/duty';
+    case UserRole.USER:
+    case UserRole.ADMIN:
     default:
       return '/(user)/home';
   }

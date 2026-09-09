@@ -1,21 +1,25 @@
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Link, router } from 'expo-router';
-import { Eye, EyeOff } from 'lucide-react-native';
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Link, router } from "expo-router";
+import { Eye, EyeOff } from "lucide-react-native";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { KeyboardAvoidingView, Platform, Pressable, View } from "react-native";
 
-import { BrandHero } from '@/components/common/brand-hero';
-import { FormInput } from '@/components/common/form-input';
-import { Alert } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { Header } from '@/components/ui/header';
-import { Screen } from '@/components/ui/screen';
-import { Text } from '@/components/ui/text';
-import { Colors } from '@/constants/theme';
-import { useSignUp } from '@/hooks/use-auth-mutations';
-import { AppError } from '@/lib/errors';
-import { PASSWORD_MIN_LENGTH, registerSchema, type RegisterInput } from '@/schemas/auth';
+import { BrandHero } from "@/components/common/brand-hero";
+import { FormInput } from "@/components/common/form-input";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Header } from "@/components/ui/header";
+import { Screen } from "@/components/ui/screen";
+import { Text } from "@/components/ui/text";
+import { Colors } from "@/constants/theme";
+import { useSignUp } from "@/hooks/use-auth-mutations";
+import { AppError } from "@/lib/errors";
+import {
+  PASSWORD_MIN_LENGTH,
+  registerSchema,
+  type RegisterInput,
+} from "@/schemas/auth";
 
 export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
@@ -24,7 +28,13 @@ export default function RegisterScreen() {
 
   const { control, handleSubmit } = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { fullName: '', email: '', phone: '', password: '', confirmPassword: '' },
+    defaultValues: {
+      fullName: "",
+      email: "",
+      phone: "",
+      password: "",
+      confirmPassword: "",
+    },
   });
 
   const onSubmit = handleSubmit(({ fullName, email, phone, password }) => {
@@ -34,7 +44,7 @@ export default function RegisterScreen() {
         onSuccess: (session) => {
           // With email confirmations enabled the account exists but there is no
           // session yet, so we must not pretend the user is signed in.
-          if (session) router.replace('/');
+          if (session) router.replace("/");
           else setNeedsEmailConfirmation(true);
         },
       },
@@ -44,7 +54,7 @@ export default function RegisterScreen() {
   const errorMessage = signUp.error
     ? signUp.error instanceof AppError
       ? signUp.error.message
-      : 'Could not create your account. Please try again.'
+      : "Could not create your account. Please try again."
     : null;
 
   if (needsEmailConfirmation) {
@@ -61,7 +71,7 @@ export default function RegisterScreen() {
           label="Back to sign in"
           variant="outline"
           className="mt-6"
-          onPress={() => router.replace('/(auth)/login')}
+          onPress={() => router.replace("/(auth)/login")}
         />
       </Screen>
     );
@@ -73,11 +83,13 @@ export default function RegisterScreen() {
         title="Create your account"
         subtitle="Book Cherry Bus and RoRo Bus trips across Palawan."
         withTagline={false}
+        size="xl"
       />
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        className="pt-8">
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        className="pt-8"
+      >
         {errorMessage ? (
           <Alert
             tone="danger"
@@ -131,9 +143,12 @@ export default function RegisterScreen() {
             trailing={
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                accessibilityLabel={
+                  showPassword ? "Hide password" : "Show password"
+                }
                 hitSlop={12}
-                onPress={() => setShowPassword((current) => !current)}>
+                onPress={() => setShowPassword((current) => !current)}
+              >
                 {showPassword ? (
                   <EyeOff size={18} color={Colors.textMuted} />
                 ) : (
@@ -169,7 +184,11 @@ export default function RegisterScreen() {
             Already have an account?
           </Text>
           <Link href="/(auth)/login" asChild>
-            <Pressable accessibilityRole="link" accessibilityLabel="Sign in" hitSlop={8}>
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel="Sign in"
+              hitSlop={8}
+            >
               <Text variant="bodyStrong" tone="primary">
                 Sign in
               </Text>

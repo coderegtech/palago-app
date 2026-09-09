@@ -3,14 +3,16 @@
 -- Applied by `pnpm db:reset`. Everything here is TEST DATA — the accounts,
 -- the schedules and every peso figure. Never load this into a real project.
 --
--- Test accounts (all share the password below):
+-- Test accounts (all share the password below). Full reference, including what
+-- each one is for and where it lands after sign-in: docs/test-accounts.md
 --
---   passenger@palago.test   USER
---   operator@palago.test    OPERATOR   Cherry Bus
---   roro@palago.test        OPERATOR   RoRo Bus
---   driver@palago.test      DRIVER     Cherry Bus
---   assistant@palago.test   ASSISTANT  Cherry Bus
---   admin@palago.test       ADMIN
+--   passenger@palago.test    USER
+--   passenger2@palago.test   USER       (a second passenger, for isolation tests)
+--   operator@palago.test     OPERATOR   Cherry Bus
+--   roro@palago.test         OPERATOR   RoRo Bus
+--   driver@palago.test       DRIVER     Cherry Bus
+--   assistant@palago.test    ASSISTANT  Cherry Bus
+--   admin@palago.test        ADMIN
 --
 --   password: PalawanGo2026
 
@@ -28,6 +30,10 @@ create temporary table seed_users (email text, full_name text, phone text) on co
 
 insert into seed_users (email, full_name, phone) values
   ('passenger@palago.test', 'Juan Dela Cruz',  '09171234567'),
+  -- A second ordinary passenger. Needed to test anything about isolation
+  -- between users: an admin makes a poor stand-in, because an admin is
+  -- legitimately allowed to see and cancel other people's bookings.
+  ('passenger2@palago.test', 'Ana Villanueva', '09175556666'),
   ('operator@palago.test',  'Cherry Bus Ops',  '09181234567'),
   ('roro@palago.test',      'RoRo Bus Ops',    '09191234567'),
   ('driver@palago.test',    'Juan Santos',     '09171112222'),

@@ -205,8 +205,21 @@ console.log('\nDriver');
 
 console.log('\nAdmin');
 {
-  const profiles = (await admin.from('profiles').select('id')).data ?? [];
-  check('admin reads every profile', profiles.length === 6, `saw ${profiles.length}`);
+  // Asserted as "can see the other accounts", not a hardcoded count — adding a
+  // seeded user should not break an unrelated policy test.
+  const profiles = (await admin.from('profiles').select('id, email')).data ?? [];
+  const seen = new Set(profiles.map((p) => p.email));
+  const expected = [
+    'passenger@palago.test',
+    'passenger2@palago.test',
+    'operator@palago.test',
+    'roro@palago.test',
+    'driver@palago.test',
+    'assistant@palago.test',
+    'admin@palago.test',
+  ];
+  const missing = expected.filter((email) => !seen.has(email));
+  check('admin reads every seeded profile', missing.length === 0, `missing ${missing.join(', ')}`);
 
   const drivers = (await admin.from('drivers').select('id')).data ?? [];
   check('admin reads every driver', drivers.length === 2, `saw ${drivers.length}`);

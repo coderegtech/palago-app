@@ -50,3 +50,6 @@ example
 # generated native folders
 /ios
 /android
+
+# Edge Function secrets
+supabase/functions/.env

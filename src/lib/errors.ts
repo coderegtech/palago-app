@@ -72,6 +72,24 @@ function fromPostgrestError(error: PostgrestError): AppError {
   }
 }
 
+/**
+ * A SECURITY DEFINER function's `raise exception 'SEAT_UNAVAILABLE'` arrives as
+ * a PostgREST error whose *message* is the code. Anything unrecognised falls
+ * through to `toAppError`, so a genuine database fault is not relabelled as a
+ * business rule.
+ */
+export function fromRpcError(error: unknown): AppError {
+  const message =
+    typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message: unknown }).message)
+      : '';
+
+  if (message in ErrorCode) {
+    return new AppError(message as ErrorCode, undefined, error);
+  }
+  return toAppError(error);
+}
+
 export function toAppError(error: unknown): AppError {
   if (error instanceof AppError) return error;
   if (error instanceof AuthError) return fromAuthError(error);

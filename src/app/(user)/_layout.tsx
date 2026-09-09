@@ -14,10 +14,16 @@ import { Colors } from '@/constants/theme';
  *
  * The gate is navigation only. Every table behind these screens is
  * independently protected by RLS — see docs/security.md.
+ *
+ * DRIVER and ASSISTANT were admitted here until Phase 8, because crew had
+ * nowhere else to go. They now have `(driver)`, so they are no longer allowed
+ * in the passenger app: a crew account is a work account, and leaving the old
+ * allowance in place meant a signed-in driver could sit in the passenger tabs
+ * looking at a wallet and a rewards balance that are not theirs to have.
  */
 export default function UserLayout() {
   return (
-    <AuthGate allow={[UserRole.USER, UserRole.ADMIN, UserRole.DRIVER, UserRole.ASSISTANT]}>
+    <AuthGate allow={[UserRole.USER, UserRole.ADMIN]}>
       <Tabs
       screenOptions={{
         headerShown: false,

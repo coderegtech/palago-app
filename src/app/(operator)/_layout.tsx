@@ -66,9 +66,10 @@ export default function OperatorLayout() {
           }}
         />
 
-        <Tabs.Screen name="assistants" options={{ href: null }} />
+        {/* Pushed from within the tabs rather than shown in the bar. */}
         <Tabs.Screen name="trips" options={{ href: null }} />
         <Tabs.Screen name="buses" options={{ href: null }} />
+        <Tabs.Screen name="manifest" options={{ href: null }} />
       </Tabs>
     </AuthGate>
   );

@@ -413,3 +413,31 @@ enabled = true
 # formatted with uppercase keywords, indent 2, max width 180, trailing commas,
 # and column/key alignment. Set to "null" to emit raw, unformatted SQL.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":180,\"commaStyle\":\"trailing\"}"
+
+# ---------------------------------------------------------------------------
+# Edge Functions
+#
+# The two payment-page functions run with verify_jwt = false because that page
+# is public by design: it opens in a browser with no PalaGo session, having been
+# reached by scanning a QR. Authorisation is the payment token carried in the
+# QR, which both functions require and validate server-side. See
+# docs/payment-flow.md.
+# ---------------------------------------------------------------------------
+
+[functions.create-test-payment]
+verify_jwt = true
+
+[functions.get-payment]
+verify_jwt = false
+
+[functions.confirm-test-payment]
+verify_jwt = false
+
+[functions.get-boarding-pass]
+verify_jwt = true
+
+[functions.validate-qr]
+verify_jwt = true
+
+[functions.confirm-boarding]
+verify_jwt = true

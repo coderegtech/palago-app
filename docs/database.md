@@ -118,16 +118,9 @@ Brooke's Point, Taytay), nine routes, five buses with generated 2+2 seat layouts
 ten trips dated relative to `current_date`, crew, assignments, and a couple of blocked seats so the
 seat map has something other than `AVAILABLE` to render.
 
-Test accounts, all with password `PalawanGo2026`:
-
-| Email | Role | Operator |
-|---|---|---|
-| `passenger@palago.test` | USER | — |
-| `operator@palago.test` | OPERATOR | Cherry Bus |
-| `roro@palago.test` | OPERATOR | RoRo Bus |
-| `driver@palago.test` | DRIVER | Cherry Bus |
-| `assistant@palago.test` | ASSISTANT | Cherry Bus |
-| `admin@palago.test` | ADMIN | — |
+Seven test accounts, all with password `PalawanGo2026`. **[test-accounts.md](test-accounts.md) is
+the full list** — roles, operators, where each lands, and what each is for. It is kept in one place
+so the copies cannot drift; this section deliberately does not repeat it.
 
 Accounts are inserted straight into `auth.users`, because there is no sign-up request to make from
 SQL. Two details are easy to get wrong and produce baffling errors:
@@ -139,3 +132,75 @@ SQL. Two details are easy to get wrong and produce baffling errors:
 
 The Phase 2 sign-up trigger still fires for seeded users, so each gets a profile automatically;
 roles and operator membership are applied immediately afterwards.
+
+## Booking and seat reservation (Phase 4)
+
+| Migration | Contents |
+|---|---|
+| `20260909000004_bookings.sql` | `booking_status`, `passenger_type`, `bookings`, `booking_passengers`, the reference sequence, the deferred `trip_seats.booking_id` FK |
+| `20260909000005_reserve_seats.sql` | `reserve_seats`, `cancel_booking`, `expire_seat_holds` |
+| `20260909000006_trip_search.sql` | the `trip_search` view |
+
+### `bookings`
+
+Read-only from the client: no INSERT, UPDATE or DELETE policy exists and those
+privileges are revoked. A client able to INSERT could set its own total; one able
+to UPDATE could mark itself `CONFIRMED` without paying.
+
+Two constraints are worth noting because they make a class of bug impossible
+rather than merely unlikely:
+
+- `bookings_total_adds_up` — `total_amount = subtotal - discount - loyalty_discount`,
+  checked by the database. A future bug cannot persist a total that does not add up.
+- `booking_reference` defaults from a **sequence**, not a row count. Two
+  concurrent bookings counting existing rows would compute the same reference.
+
+### `reserve_seats(p_trip_id, p_passengers)`
+
+The signature deviates from the original spec sketch, deliberately:
+
+- **`p_user_id` is gone.** The owner comes from `auth.uid()`. Accepting a user id
+  from the caller would let anyone book in someone else's name.
+- **`p_seat_ids` is folded into `p_passengers`**, each carrying its own `seatId`.
+  Two parallel arrays can disagree about length or order; one array cannot.
+
+Inside, the ordering is the entire point: **lock first, then check.** A
+concurrent caller wanting any of the same seats blocks on the `FOR UPDATE`; when
+it proceeds, READ COMMITTED gives it a fresh snapshot in which those seats are
+`HELD`, so its availability check fails. Checking before locking would let both
+callers read `AVAILABLE` and both proceed.
+
+The lock is taken `ORDER BY seat_id`. Without a deterministic order, two callers
+requesting overlapping seat sets in opposite orders each hold one row and wait on
+the other's — a deadlock Postgres resolves by killing one with an error the
+client cannot interpret.
+
+Prices are computed from the trip's own `fare`. Nothing about the amount comes
+from the caller.
+
+Errors are raised with the message set to an exact code from
+`src/constants/errors.ts`; `mapRpcError` in `src/services/booking-service.ts`
+turns them back into a typed `AppError`.
+
+### `expire_seat_holds()`
+
+Granted to `service_role` only. Expiry must not depend on a client timer, which
+stops the moment the app is backgrounded.
+
+### The `trip_search` view
+
+Search needs a trip plus operator, both terminals, the bus, and a live bookable-seat
+count. The view is declared `with (security_invoker = true)` so it runs with the
+**caller's** privileges — without that, a view becomes a way around RLS.
+
+### Verifying
+
+```bash
+pnpm db:verify:all
+```
+
+`scripts/verify-booking.mjs` adds 38 checks to the 31 RLS ones, including the one
+guarantee that cannot be unit-tested: eight simultaneous callers race for a
+single seat and exactly one wins. It also covers overlapping-set deadlock
+resistance, expired-hold reclaim, idempotent cancellation, and that a client
+cannot confirm its own booking. It cleans up after itself, so it is re-runnable.
