@@ -1,0 +1,10 @@
+# Vercel only builds the Expo web bundle. Everything below is either backend
+# code that never reaches Metro, or local development state.
+
+supabase/
+docs/
+scripts/verify-*.mjs
+coverage/
+.expo/
+.claude/
+assets/brand/

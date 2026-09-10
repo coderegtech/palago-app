@@ -73,7 +73,7 @@ export function PalaGoLogo({
       accessibilityRole="image"
       accessibilityLabel="PalaGo"
       className={cn(
-        layout === 'stacked' ? 'items-center gap-2' : 'flex-row items-center gap-3',
+        layout === 'stacked' ? 'items-center gap-2' : 'flex-row items-center gap-2',
         className,
       )}>
       <PalaGoMark size={markSize[size]} />

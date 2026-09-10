@@ -141,7 +141,7 @@ export default function HomeScreen() {
     <Screen padded={false}>
       <ScrollView contentContainerClassName="px-4 pb-8 gap-4" showsVerticalScrollIndicator={false}>
         <View className="flex-row items-center justify-between pt-2">
-          <PalaGoLogo size="sm" />
+          <PalaGoLogo size="md" />
           <IconButton
             accessibilityLabel="Notifications"
             variant="soft"

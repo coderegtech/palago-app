@@ -1,7 +1,8 @@
 -- PalaGo development seed.
 --
 -- Applied by `pnpm db:reset`. Everything here is TEST DATA — the accounts,
--- the schedules and every peso figure. Never load this into a real project.
+-- the schedules, the payments, the wallet and loyalty movement, and every
+-- peso figure. Never load this into a real project.
 --
 -- Test accounts (all share the password below). Full reference, including what
 -- each one is for and where it lands after sign-in: docs/test-accounts.md
@@ -253,7 +254,61 @@ join public.routes r
 join public.buses b on b.operator_id = o.id and b.bus_number = t.bus_number;
 
 -- ---------------------------------------------------------------------------
+-- Two extra Cherry Bus trips: one already finished, one currently under way.
+-- Slots 'Z' and 'Y' so they cannot collide with A-F above. Everything from
+-- here to the end of the file builds realistic activity on top of the plain
+-- schedule — bookings, payments, boarding, tracking, wallet and loyalty
+-- movement — so every table has more than an empty shell to render against.
+-- ---------------------------------------------------------------------------
+
+create temporary table seed_extra_trips (label text primary key, trip_id uuid not null) on commit drop;
+
+with ins as (
+  insert into public.trips (
+    operator_id, route_id, bus_id, trip_number, departure_date, departure_time, arrival_time, fare, status
+  )
+  select
+    o.id, r.id, b.id,
+    'CHERRY-' || to_char(current_date - 1, 'MMDD') || '-Z',
+    current_date - 1, '06:00'::time,
+    ('06:00'::time + make_interval(mins => r.duration_minutes)),
+    70000, 'ARRIVED'::public.trip_status
+  from public.operators o
+  join public.routes r on r.operator_id = o.id
+  join public.terminals orig on orig.id = r.origin_terminal_id and orig.code = 'PPS'
+  join public.terminals dest on dest.id = r.destination_terminal_id and dest.code = 'ELN'
+  join public.buses b on b.operator_id = o.id and b.bus_number = 'CB-001'
+  where o.code = 'CHERRY'
+  returning id
+)
+insert into seed_extra_trips select 'HISTORICAL', id from ins;
+
+with ins as (
+  insert into public.trips (
+    operator_id, route_id, bus_id, trip_number, departure_date, departure_time, arrival_time, fare, status
+  )
+  select
+    o.id, r.id, b.id,
+    'CHERRY-' || to_char(current_date, 'MMDD') || '-Y',
+    current_date, '08:00'::time,
+    ('08:00'::time + make_interval(mins => r.duration_minutes)),
+    70000, 'DEPARTED'::public.trip_status
+  from public.operators o
+  join public.routes r on r.operator_id = o.id
+  join public.terminals orig on orig.id = r.origin_terminal_id and orig.code = 'PPS'
+  join public.terminals dest on dest.id = r.destination_terminal_id and dest.code = 'ELN'
+  join public.buses b on b.operator_id = o.id and b.bus_number = 'CB-003'
+  where o.code = 'CHERRY'
+  returning id
+)
+insert into seed_extra_trips select 'LIVE', id from ins;
+
+-- ---------------------------------------------------------------------------
 -- Crew assignments
+--
+-- Runs after the extra trips above, so 'Z' and 'Y' pick up the same default
+-- crew as every other Cherry Bus departure; the two updates that follow move
+-- them to the assignment status each trip's stage of the journey implies.
 -- ---------------------------------------------------------------------------
 
 insert into public.trip_assignments (trip_id, driver_id, assistant_id, status)
@@ -267,6 +322,14 @@ join public.operators o on o.id = t.operator_id and o.code = 'CHERRY'
 join public.drivers d on d.operator_id = o.id and d.license_number = 'DRV-001'
 join public.assistants a on a.operator_id = o.id and a.name = 'Maria Reyes';
 
+update public.trip_assignments
+   set status = 'COMPLETED'
+ where trip_id = (select trip_id from seed_extra_trips where label = 'HISTORICAL');
+
+update public.trip_assignments
+   set status = 'ACTIVE'
+ where trip_id = (select trip_id from seed_extra_trips where label = 'LIVE');
+
 -- ---------------------------------------------------------------------------
 -- A couple of blocked seats, so the seat map has something other than
 -- AVAILABLE to render while Phase 4 is being built.
@@ -279,5 +342,705 @@ where ts.seat_id = bs.id
   and ts.trip_id = t.id
   and t.trip_number like 'CHERRY-%-A'
   and bs.seat_number in ('1A', '1B');
+
+-- ---------------------------------------------------------------------------
+-- Actual departure/arrival times for the two extra trips. Never defaulted to
+-- the schedule (docs/database.md) — set explicitly here instead, the same way
+-- `start_trip` / `end_trip` would.
+-- ---------------------------------------------------------------------------
+
+update public.trips
+   set actual_departure_at = departure_date + departure_time,
+       actual_arrival_at = (departure_date + departure_time) + interval '338 minutes'
+ where id = (select trip_id from seed_extra_trips where label = 'HISTORICAL');
+
+update public.trips
+   set actual_departure_at = now() - interval '18 minutes'
+ where id = (select trip_id from seed_extra_trips where label = 'LIVE');
+
+-- ---------------------------------------------------------------------------
+-- bus_locations
+--
+-- A finished trail for the completed trip (Puerto Princesa to El Nido, four
+-- fixes across the 338-minute run) and a short, recent trail for the trip
+-- still under way (three fixes in the last 18 minutes, barely out of Puerto
+-- Princesa). Coordinates are linear interpolation between the two terminals —
+-- illustrative, not a real road route.
+-- ---------------------------------------------------------------------------
+
+insert into public.bus_locations (trip_id, driver_id, latitude, longitude, speed_kph, heading, accuracy_m, recorded_at)
+select t.id, ta.driver_id, v.latitude, v.longitude, v.speed_kph, v.heading, v.accuracy_m,
+       t.actual_departure_at + make_interval(mins => v.minute_offset)
+from public.trips t
+join public.trip_assignments ta on ta.trip_id = t.id
+cross join (values
+  (34::integer,  9.9283::numeric, 118.8000::numeric, 58.0::numeric, 38.0::numeric,  9.0::numeric),
+  (135::integer, 10.3457::numeric, 118.9978::numeric, 62.0::numeric, 35.0::numeric,  7.5::numeric),
+  (237::integer, 10.7631::numeric, 119.1955::numeric, 60.0::numeric, 32.0::numeric,  8.0::numeric),
+  (338::integer, 11.1805::numeric, 119.3933::numeric,  8.0::numeric, null::numeric, 12.0::numeric)
+) as v(minute_offset, latitude, longitude, speed_kph, heading, accuracy_m)
+where t.id = (select trip_id from seed_extra_trips where label = 'HISTORICAL');
+
+insert into public.bus_locations (trip_id, driver_id, latitude, longitude, speed_kph, heading, accuracy_m, recorded_at)
+select t.id, ta.driver_id, v.latitude, v.longitude, v.speed_kph, v.heading, v.accuracy_m,
+       now() - make_interval(mins => v.minutes_ago)
+from public.trips t
+join public.trip_assignments ta on ta.trip_id = t.id
+cross join (values
+  (16::integer, 9.7976::numeric, 118.7381::numeric, 45.0::numeric, 40.0::numeric, 10.0::numeric),
+  (9::integer,  9.8268::numeric, 118.7519::numeric, 52.0::numeric, 42.0::numeric,  9.0::numeric),
+  (2::integer,  9.8560::numeric, 118.7657::numeric, 58.0::numeric, 41.0::numeric,  8.0::numeric)
+) as v(minutes_ago, latitude, longitude, speed_kph, heading, accuracy_m)
+where t.id = (select trip_id from seed_extra_trips where label = 'LIVE');
+
+-- ---------------------------------------------------------------------------
+-- Wallet activity
+--
+-- `wallets` rows already exist — `profiles_create_wallet` made one for every
+-- seeded account when the profile was inserted above. `wallet_post` is the
+-- same internal function `top_up_wallet` calls; it moves the balance and
+-- writes the ledger entry together, so calling it here keeps the invariant
+-- (`sum(amount) = balance`) true without re-deriving it by hand.
+-- ---------------------------------------------------------------------------
+
+select public.wallet_post(
+  (select id from public.wallets where user_id = (select id from auth.users where email = 'passenger@palago.test')),
+  'TOP_UP', 20000, null, 'Wallet top-up', null, null, null
+);
+
+-- passenger2 gets the larger top-up: Booking 6 below pays a Trip D booking
+-- from this wallet after a reward discount, and needs the headroom.
+select public.wallet_post(
+  (select id from public.wallets where user_id = (select id from auth.users where email = 'passenger2@palago.test')),
+  'TOP_UP', 100000, null, 'Wallet top-up', null, null, null
+);
+
+select public.wallet_post(
+  (select id from public.wallets where user_id = (select id from auth.users where email = 'passenger@palago.test')),
+  'ADJUSTMENT', 1000, null, 'Customer support credit', null, null, null
+);
+
+-- ---------------------------------------------------------------------------
+-- Booking 1: Trip A (Cherry, Puerto Princesa to El Nido), paid by QR.
+--
+-- Mirrors `reserve_seats` + `create_test_payment` + `confirm_test_payment`
+-- exactly, except the first two are plain inserts rather than RPC calls —
+-- those functions read `auth.uid()`, which has no meaning for a script with
+-- no session. `confirm_test_payment` reads the payment by reference and
+-- token instead (it is what the public, session-less payment page calls), so
+-- it runs here unmodified and produces a real receipt, ledger entry, audit
+-- row and notification.
+-- ---------------------------------------------------------------------------
+
+with target_trip as (
+  select id as trip_id, bus_id, fare from public.trips where trip_number like 'CHERRY-%-A'
+),
+target_seat as (
+  select bs.id as seat_id from public.bus_seats bs, target_trip
+  where bs.bus_id = target_trip.bus_id and bs.seat_number = '2A'
+),
+new_booking as (
+  insert into public.bookings (user_id, trip_id, status, subtotal, discount, loyalty_discount, total_amount, expires_at)
+  select
+    (select id from auth.users where email = 'passenger@palago.test'),
+    target_trip.trip_id, 'PAYMENT_PENDING', target_trip.fare, 0, 0, target_trip.fare, now() + interval '10 minutes'
+  from target_trip
+  returning id, trip_id, user_id, total_amount, expires_at
+),
+new_passenger as (
+  insert into public.booking_passengers (booking_id, user_id, seat_id, passenger_name, phone, passenger_type)
+  select new_booking.id, new_booking.user_id, target_seat.seat_id, 'Juan Dela Cruz', '09171234567', 'ADULT'
+  from new_booking, target_seat
+  returning booking_id
+)
+update public.trip_seats ts
+   set status = 'HELD', booking_id = new_booking.id, held_by = new_booking.user_id, held_until = new_booking.expires_at
+  from new_booking, target_seat, new_passenger
+ where ts.trip_id = new_booking.trip_id and ts.seat_id = target_seat.seat_id;
+
+insert into public.payments (booking_id, amount, currency, status, expires_at)
+select b.id, b.total_amount, 'PHP', 'PENDING', b.expires_at
+from public.bookings b
+join public.trips t on t.id = b.trip_id
+where t.trip_number like 'CHERRY-%-A' and b.status = 'PAYMENT_PENDING';
+
+-- confirm_test_payment runs as its own statement, not chained onto the
+-- booking/hold/payment statement above: its internal trip_seats update
+-- matches by `booking_id`, a value the hold above set moments earlier in the
+-- same statement would silently see as still null (see the note on
+-- Booking 3) — a fresh statement gives it a correct, fully-committed view.
+select public.confirm_test_payment(p.reference, p.token, null)
+from public.payments p
+join public.bookings b on b.id = p.booking_id
+join public.trips t on t.id = b.trip_id
+where t.trip_number like 'CHERRY-%-A' and p.status = 'PENDING';
+
+-- ---------------------------------------------------------------------------
+-- Booking 2: Trip B (Cherry, Puerto Princesa to El Nido) — seats held and a
+-- QR payment created, but never paid. The "awaiting payment" state a
+-- passenger sees between reserving seats and deciding to pay.
+-- ---------------------------------------------------------------------------
+
+with target_trip as (
+  select id as trip_id, bus_id, fare from public.trips where trip_number like 'CHERRY-%-B'
+),
+target_seat as (
+  select bs.id as seat_id from public.bus_seats bs, target_trip
+  where bs.bus_id = target_trip.bus_id and bs.seat_number = '2A'
+),
+new_booking as (
+  insert into public.bookings (user_id, trip_id, status, subtotal, discount, loyalty_discount, total_amount, expires_at)
+  select
+    (select id from auth.users where email = 'passenger2@palago.test'),
+    target_trip.trip_id, 'PAYMENT_PENDING', target_trip.fare, 0, 0, target_trip.fare, now() + interval '10 minutes'
+  from target_trip
+  returning id, trip_id, user_id, total_amount, expires_at
+),
+new_passenger as (
+  insert into public.booking_passengers (booking_id, user_id, seat_id, passenger_name, phone, passenger_type)
+  select new_booking.id, new_booking.user_id, target_seat.seat_id, 'Ana Villanueva', '09175556666', 'ADULT'
+  from new_booking, target_seat
+  returning booking_id
+),
+hold_seat as (
+  update public.trip_seats ts
+     set status = 'HELD', booking_id = new_booking.id, held_by = new_booking.user_id, held_until = new_booking.expires_at
+    from new_booking, target_seat
+   where ts.trip_id = new_booking.trip_id and ts.seat_id = target_seat.seat_id
+  returning ts.trip_id
+),
+new_payment as (
+  insert into public.payments (booking_id, amount, currency, status, expires_at)
+  select new_booking.id, new_booking.total_amount, 'PHP', 'PENDING', new_booking.expires_at
+  from new_booking
+  returning id, reference, amount
+),
+log_txn as (
+  insert into public.payment_transactions (payment_id, type, amount, status, reference)
+  select new_payment.id, 'CREATED', new_payment.amount, 'PENDING', new_payment.reference
+  from new_payment
+  returning payment_id
+)
+insert into public.audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+select
+  new_booking.user_id, 'PAYMENT_CREATED', 'payment', new_payment.id,
+  jsonb_build_object('bookingId', new_booking.id, 'amount', new_payment.amount, 'provider', 'MOCK')
+from new_booking, new_payment, log_txn;
+
+-- ---------------------------------------------------------------------------
+-- Booking 3: Trip C (Cherry, El Nido to Puerto Princesa) — reserved, then
+-- cancelled before payment. `cancel_booking`'s own precondition (status
+-- PENDING/PAYMENT_PENDING) is exactly this state.
+-- ---------------------------------------------------------------------------
+
+-- Postgres note: every multi-CTE statement below writes each table at most
+-- once. A second CTE re-updating a row an earlier CTE in the *same*
+-- statement already touched is documented as unspecified — it silently
+-- matched zero rows when tried here — so any second write to the same table
+-- (the cancellation itself, then releasing the seat) is its own statement.
+
+with target_trip as (
+  select id as trip_id, bus_id, fare from public.trips where trip_number like 'CHERRY-%-C'
+),
+target_seat as (
+  select bs.id as seat_id from public.bus_seats bs, target_trip
+  where bs.bus_id = target_trip.bus_id and bs.seat_number = '2A'
+),
+new_booking as (
+  insert into public.bookings (user_id, trip_id, status, subtotal, discount, loyalty_discount, total_amount, expires_at)
+  select
+    (select id from auth.users where email = 'passenger2@palago.test'),
+    target_trip.trip_id, 'PAYMENT_PENDING', target_trip.fare, 0, 0, target_trip.fare, now() + interval '10 minutes'
+  from target_trip
+  returning id, trip_id, user_id
+),
+new_passenger as (
+  insert into public.booking_passengers (booking_id, user_id, seat_id, passenger_name, phone, passenger_type)
+  select new_booking.id, new_booking.user_id, target_seat.seat_id, 'Ana Villanueva', '09175556666', 'ADULT'
+  from new_booking, target_seat
+  returning booking_id
+)
+update public.trip_seats ts
+   set status = 'HELD', booking_id = new_booking.id, held_by = new_booking.user_id, held_until = now() + interval '10 minutes'
+  from new_booking, target_seat, new_passenger
+ where ts.trip_id = new_booking.trip_id and ts.seat_id = target_seat.seat_id;
+
+update public.bookings b
+   set status = 'CANCELLED', cancelled_at = now()
+  from public.trips t
+ where b.trip_id = t.id
+   and t.trip_number like 'CHERRY-%-C'
+   and b.user_id = (select id from auth.users where email = 'passenger2@palago.test')
+   and b.status = 'PAYMENT_PENDING';
+
+update public.trip_seats ts
+   set status = 'AVAILABLE', booking_id = null, held_by = null, held_until = null
+  from public.bookings b
+  join public.trips t on t.id = b.trip_id
+ where ts.booking_id = b.id
+   and t.trip_number like 'CHERRY-%-C'
+   and b.status = 'CANCELLED';
+
+-- ---------------------------------------------------------------------------
+-- Booking 4: the RoRo Bus Puerto Princesa - Coron trip, paid by QR and then
+-- refunded — a payment moving through its full PENDING -> PAID -> REFUNDED
+-- life, with the wallet-credit branch skipped because this one was never
+-- paid from a wallet (see `refund_test_payment`).
+-- ---------------------------------------------------------------------------
+
+with target_trip as (
+  select id as trip_id, bus_id, fare from public.trips where trip_number like 'RORO-%-A'
+),
+target_seat as (
+  select bs.id as seat_id from public.bus_seats bs, target_trip
+  where bs.bus_id = target_trip.bus_id and bs.seat_number = '2A'
+),
+new_booking as (
+  insert into public.bookings (user_id, trip_id, status, subtotal, discount, loyalty_discount, total_amount, expires_at)
+  select
+    (select id from auth.users where email = 'passenger@palago.test'),
+    target_trip.trip_id, 'PAYMENT_PENDING', target_trip.fare, 0, 0, target_trip.fare, now() + interval '10 minutes'
+  from target_trip
+  returning id, trip_id, user_id, total_amount, expires_at
+),
+new_passenger as (
+  insert into public.booking_passengers (booking_id, user_id, seat_id, passenger_name, phone, passenger_type)
+  select new_booking.id, new_booking.user_id, target_seat.seat_id, 'Juan Dela Cruz', '09171234567', 'ADULT'
+  from new_booking, target_seat
+  returning booking_id
+)
+update public.trip_seats ts
+   set status = 'HELD', booking_id = new_booking.id, held_by = new_booking.user_id, held_until = new_booking.expires_at
+  from new_booking, target_seat, new_passenger
+ where ts.trip_id = new_booking.trip_id and ts.seat_id = target_seat.seat_id;
+
+insert into public.payments (booking_id, amount, currency, status, expires_at)
+select b.id, b.total_amount, 'PHP', 'PENDING', b.expires_at
+from public.bookings b
+join public.trips t on t.id = b.trip_id
+where t.trip_number like 'RORO-%-A' and b.status = 'PAYMENT_PENDING';
+
+-- Its own statement for the same reason as Booking 1's — see the note there.
+select public.confirm_test_payment(p.reference, p.token, null)
+from public.payments p
+join public.bookings b on b.id = p.booking_id
+join public.trips t on t.id = b.trip_id
+where t.trip_number like 'RORO-%-A' and p.status = 'PENDING';
+
+with target as (
+  select b.id as booking_id, b.booking_reference, b.user_id, p.id as payment_id,
+         p.reference as payment_reference, p.amount
+  from public.bookings b
+  join public.trips t on t.id = b.trip_id
+  join public.payments p on p.booking_id = b.id and p.status = 'PAID'
+  where t.trip_number like 'RORO-%-A'
+),
+refund_payment as (
+  update public.payments set status = 'REFUNDED', refunded_at = now()
+   where id = (select payment_id from target)
+  returning id
+),
+refund_booking as (
+  update public.bookings set status = 'REFUNDED', cancelled_at = now()
+    from refund_payment
+   where public.bookings.id = (select booking_id from target)
+  returning public.bookings.id
+),
+release_seat as (
+  update public.trip_seats
+     set status = 'AVAILABLE', booking_id = null, held_by = null, held_until = null, confirmed_at = null
+    from refund_booking
+   where booking_id = (select booking_id from target)
+  returning trip_id
+),
+log_txn as (
+  insert into public.payment_transactions (payment_id, type, amount, status, reference, metadata)
+  select target.payment_id, 'REFUNDED', target.amount, 'REFUNDED', target.payment_reference,
+    jsonb_build_object('provider', 'MOCK', 'toWallet', false, 'pointsReturned', 0, 'note', 'Test refund - no funds moved')
+  from target, release_seat
+  returning payment_id
+),
+log_audit as (
+  insert into public.audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+  select target.user_id, 'TEST_PAYMENT_REFUNDED', 'payment', target.payment_id,
+    jsonb_build_object('bookingId', target.booking_id, 'amount', target.amount, 'toWallet', false, 'pointsReturned', 0)
+  from target, log_txn
+  returning id
+)
+insert into public.notifications (user_id, type, title, message, data)
+select
+  target.user_id, 'SYSTEM', 'Booking refunded',
+  'Your booking ' || target.booking_reference || ' has been refunded.',
+  jsonb_build_object('bookingId', target.booking_id, 'toWallet', false, 'pointsReturned', 0)
+from target, log_audit;
+
+-- ---------------------------------------------------------------------------
+-- Booking 5: the completed historical trip (Trip Z). Paid by QR, boarded,
+-- and carried through to the trip's end — the one status a booking can only
+-- reach by actually being travelled, which is why loyalty points are awarded
+-- here through the real `award_loyalty_for_booking` function rather than by
+-- hand: it re-derives the points from what was actually paid, exactly as
+-- `end_trip` would when a driver ends the trip for real.
+-- ---------------------------------------------------------------------------
+
+with target_trip as (
+  select id as trip_id, bus_id, fare from public.trips
+  where id = (select trip_id from seed_extra_trips where label = 'HISTORICAL')
+),
+target_seat as (
+  select bs.id as seat_id from public.bus_seats bs, target_trip
+  where bs.bus_id = target_trip.bus_id and bs.seat_number = '2A'
+),
+new_booking as (
+  insert into public.bookings (user_id, trip_id, status, subtotal, discount, loyalty_discount, total_amount, expires_at)
+  select
+    (select id from auth.users where email = 'passenger2@palago.test'),
+    target_trip.trip_id, 'PAYMENT_PENDING', target_trip.fare, 0, 0, target_trip.fare, now() + interval '10 minutes'
+  from target_trip
+  returning id, trip_id, user_id, total_amount, expires_at
+),
+new_passenger as (
+  insert into public.booking_passengers (booking_id, user_id, seat_id, passenger_name, phone, passenger_type)
+  select new_booking.id, new_booking.user_id, target_seat.seat_id, 'Ana Villanueva', '09175556666', 'ADULT'
+  from new_booking, target_seat
+  returning booking_id
+)
+update public.trip_seats ts
+   set status = 'HELD', booking_id = new_booking.id, held_by = new_booking.user_id, held_until = new_booking.expires_at
+  from new_booking, target_seat, new_passenger
+ where ts.trip_id = new_booking.trip_id and ts.seat_id = target_seat.seat_id;
+
+insert into public.payments (booking_id, amount, currency, status, expires_at)
+select b.id, b.total_amount, 'PHP', 'PENDING', b.expires_at
+from public.bookings b
+where b.trip_id = (select trip_id from seed_extra_trips where label = 'HISTORICAL')
+  and b.status = 'PAYMENT_PENDING';
+
+-- Its own statement for the same reason as Booking 1's — see the note there.
+select public.confirm_test_payment(p.reference, p.token, null)
+from public.payments p
+join public.bookings b on b.id = p.booking_id
+where b.trip_id = (select trip_id from seed_extra_trips where label = 'HISTORICAL')
+  and p.status = 'PENDING';
+
+with ctx as (
+  select b.id as booking_id, b.booking_reference, b.user_id, b.trip_id, t.actual_departure_at
+  from public.bookings b
+  join public.trips t on t.id = b.trip_id
+  where t.id = (select trip_id from seed_extra_trips where label = 'HISTORICAL')
+    and b.user_id = (select id from auth.users where email = 'passenger2@palago.test')
+),
+scanner as (
+  select id as scanner_id from auth.users where email = 'assistant@palago.test'
+),
+board as (
+  update public.bookings b
+     set status = 'BOARDED', checked_in_at = ctx.actual_departure_at, boarded_at = ctx.actual_departure_at
+    from ctx
+   where b.id = ctx.booking_id
+  returning b.id
+),
+scan_validate as (
+  insert into public.qr_scans (booking_id, operator_user_id, trip_id, scan_type, result)
+  select ctx.booking_id, scanner.scanner_id, ctx.trip_id, 'VALIDATION', 'VALID'
+  from ctx, scanner, board
+  returning id
+),
+scan_board as (
+  insert into public.qr_scans (booking_id, operator_user_id, trip_id, scan_type, result)
+  select ctx.booking_id, scanner.scanner_id, ctx.trip_id, 'BOARDING', 'VALID'
+  from ctx, scanner, board
+  returning id
+),
+-- The assistant scans the same boarding pass again by accident. The status
+-- transition itself is what refuses the second boarding — see
+-- docs and 20260909000011_boarding.sql — this row is that refusal's evidence.
+scan_repeat as (
+  insert into public.qr_scans (booking_id, operator_user_id, trip_id, scan_type, result)
+  select ctx.booking_id, scanner.scanner_id, ctx.trip_id, 'BOARDING', 'ALREADY_BOARDED'
+  from ctx, scanner, board
+  returning id
+),
+log_audit as (
+  insert into public.audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+  select scanner.scanner_id, 'BOARDING_CONFIRMED', 'booking', ctx.booking_id,
+    jsonb_build_object('bookingReference', ctx.booking_reference, 'tripId', ctx.trip_id)
+  from ctx, scanner, board
+  returning id
+)
+insert into public.notifications (user_id, type, title, message, data)
+select ctx.user_id, 'BOARDING', 'You have boarded',
+  'Boarding confirmed for ' || ctx.booking_reference || '. Have a safe trip.',
+  jsonb_build_object('bookingId', ctx.booking_id)
+from ctx, board;
+
+-- A second write to `bookings` in the same statement as `board` above would
+-- silently match zero rows (see the note by Booking 3), so completing the
+-- trip is its own statement, and the loyalty award — which re-reads the
+-- booking's own status and paid amount — runs only once that has committed.
+update public.bookings b
+   set status = 'COMPLETED'
+  from public.trips t
+ where b.trip_id = t.id
+   and t.id = (select trip_id from seed_extra_trips where label = 'HISTORICAL')
+   and b.user_id = (select id from auth.users where email = 'passenger2@palago.test')
+   and b.status = 'BOARDED';
+
+select public.award_loyalty_for_booking(b.id)
+  from public.bookings b
+  join public.trips t on t.id = b.trip_id
+ where t.id = (select trip_id from seed_extra_trips where label = 'HISTORICAL')
+   and b.user_id = (select id from auth.users where email = 'passenger2@palago.test');
+
+-- Something scanned at the Cherry Bus gate that was not one of ours —
+-- `validate_booking_qr` logs exactly this shape when the reference does not
+-- match any booking: no booking id, no trip id, just the refusal.
+insert into public.qr_scans (operator_user_id, scan_type, result)
+select id, 'VALIDATION', 'INVALID_QR' from auth.users where email = 'operator@palago.test';
+
+-- ---------------------------------------------------------------------------
+-- Booking 6: Trip D (Cherry, Puerto Princesa to Roxas), two seats, a
+-- redeemed reward and payment from the wallet. The redemption needs points,
+-- which is why this runs after Booking 5 above has already credited some.
+-- ---------------------------------------------------------------------------
+
+with target_trip as (
+  select id as trip_id, bus_id, fare from public.trips where trip_number like 'CHERRY-%-D'
+),
+seat1 as (
+  select bs.id as seat_id from public.bus_seats bs, target_trip
+  where bs.bus_id = target_trip.bus_id and bs.seat_number = '2A'
+),
+seat2 as (
+  select bs.id as seat_id from public.bus_seats bs, target_trip
+  where bs.bus_id = target_trip.bus_id and bs.seat_number = '2B'
+),
+new_booking as (
+  insert into public.bookings (user_id, trip_id, status, subtotal, discount, loyalty_discount, total_amount, expires_at)
+  select
+    (select id from auth.users where email = 'passenger2@palago.test'),
+    target_trip.trip_id, 'PAYMENT_PENDING', target_trip.fare * 2, 0, 0, target_trip.fare * 2, now() + interval '10 minutes'
+  from target_trip
+  returning id, trip_id, user_id, expires_at
+),
+both_seats as (
+  select seat_id from seat1 union all select seat_id from seat2
+),
+new_passengers as (
+  insert into public.booking_passengers (booking_id, user_id, seat_id, passenger_name, phone, passenger_type)
+  select new_booking.id, new_booking.user_id, both_seats.seat_id, 'Ana Villanueva', '09175556666', 'ADULT'
+  from new_booking, both_seats
+  returning booking_id
+)
+update public.trip_seats ts
+   set status = 'HELD', booking_id = new_booking.id, held_by = new_booking.user_id, held_until = new_booking.expires_at
+  from new_booking, both_seats
+ where ts.trip_id = new_booking.trip_id and ts.seat_id = both_seats.seat_id;
+
+with target as (
+  select b.id as booking_id, b.booking_reference, b.user_id, b.subtotal, b.discount
+  from public.bookings b
+  join public.trips t on t.id = b.trip_id
+  where t.trip_number like 'CHERRY-%-D'
+),
+reward as (
+  select id as reward_id, name, points_required, discount_value from public.rewards where code = 'FIFTY_OFF'
+),
+spend_points as (
+  select public.loyalty_post(
+    target.user_id, 'REDEEMED', -reward.points_required, target.booking_reference,
+    reward.name || ' on booking ' || target.booking_reference, target.booking_id
+  ) as txn
+  from target, reward
+),
+new_redemption as (
+  insert into public.reward_redemptions (user_id, reward_id, booking_id, points_used, discount_applied)
+  select target.user_id, reward.reward_id, target.booking_id, reward.points_required, reward.discount_value
+  from target, reward, spend_points
+  returning id
+)
+update public.bookings b
+   set loyalty_discount = reward.discount_value,
+       total_amount = target.subtotal - target.discount - reward.discount_value
+  from target, reward, new_redemption
+ where b.id = target.booking_id;
+
+with target as (
+  select b.id as booking_id, b.booking_reference, b.user_id, b.trip_id, b.total_amount, b.currency
+  from public.bookings b
+  join public.trips t on t.id = b.trip_id
+  where t.trip_number like 'CHERRY-%-D'
+),
+wallet as (
+  select id as wallet_id from public.wallets where user_id = (select user_id from target)
+),
+new_payment as (
+  insert into public.payments (booking_id, provider, amount, currency, status, paid_at)
+  select target.booking_id, 'MOCK', target.total_amount, target.currency, 'PAID', now()
+  from target
+  returning id, reference, amount
+),
+new_receipt as (
+  insert into public.receipts (payment_id, booking_id, amount, currency, payment_method, status)
+  select new_payment.id, target.booking_id, new_payment.amount, target.currency, 'PalaGo Wallet', 'PAID'
+  from new_payment, target
+  returning id, receipt_number, payment_id
+),
+-- Stamping the receipt number back onto `payments` happens in its own
+-- statement further down: a second write to a row `new_payment` already
+-- inserted, in the same WITH, would silently match zero rows (see the note
+-- on Booking 3).
+charge_wallet as (
+  select public.wallet_post(
+    wallet.wallet_id, 'BOOKING_PAYMENT', -target.total_amount, target.booking_reference,
+    'Booking ' || target.booking_reference, target.booking_id, new_payment.id, null
+  ) as txn
+  from target, wallet, new_payment, new_receipt
+),
+confirm_booking as (
+  update public.bookings b
+     set status = 'CONFIRMED', confirmed_at = now(), expires_at = null
+    from charge_wallet
+   where b.id = (select booking_id from target)
+  returning b.id
+),
+-- mark_seats touches two rows (Trip D is a two-seat booking): joining a
+-- later CTE straight to it would cross the result with every seat and
+-- duplicate every insert from here on. An EXISTS check keeps the ordering
+-- dependency without multiplying rows.
+mark_seats as (
+  update public.trip_seats ts
+     set status = 'BOOKED', confirmed_at = now(), held_until = null
+    from confirm_booking
+   where ts.booking_id = confirm_booking.id
+  returning ts.id
+),
+log_txn as (
+  insert into public.payment_transactions (payment_id, type, amount, status, reference, metadata)
+  select new_payment.id, 'PAID', new_payment.amount, 'PAID', new_receipt.receipt_number,
+    jsonb_build_object('provider', 'MOCK', 'method', 'WALLET', 'note', 'Test payment from mock wallet - no funds moved')
+  from new_payment, new_receipt
+  where exists (select 1 from mark_seats)
+  returning payment_id
+),
+log_audit as (
+  insert into public.audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+  select target.user_id, 'WALLET_BOOKING_PAID', 'payment', new_payment.id,
+    jsonb_build_object('bookingId', target.booking_id, 'bookingReference', target.booking_reference,
+                       'receiptNumber', new_receipt.receipt_number, 'amount', new_payment.amount)
+  from target, new_payment, new_receipt
+  where exists (select 1 from log_txn)
+  returning id
+)
+insert into public.notifications (user_id, type, title, message, data)
+select target.user_id, 'PAYMENT_CONFIRMED', 'Paid from your wallet',
+  'Booking ' || target.booking_reference || ' is confirmed.',
+  jsonb_build_object('bookingId', target.booking_id, 'bookingReference', target.booking_reference,
+                     'receiptNumber', new_receipt.receipt_number)
+from target, new_payment, new_receipt
+where exists (select 1 from log_audit);
+
+update public.payments p
+   set receipt_number = r.receipt_number
+  from public.receipts r
+ where r.payment_id = p.id
+   and p.receipt_number is null
+   and r.booking_id in (
+     select b.id from public.bookings b
+     join public.trips t on t.id = b.trip_id
+     where t.trip_number like 'CHERRY-%-D'
+   );
+
+-- ---------------------------------------------------------------------------
+-- Booking 7: the trip currently under way (Trip Y). Paid, boarded, and moved
+-- to ON_TRIP the way `start_trip` moves every already-boarded passenger the
+-- moment the bus actually leaves — the live map and the driver's manifest
+-- have someone to show.
+-- ---------------------------------------------------------------------------
+
+with target_trip as (
+  select id as trip_id, bus_id, fare from public.trips
+  where id = (select trip_id from seed_extra_trips where label = 'LIVE')
+),
+target_seat as (
+  select bs.id as seat_id from public.bus_seats bs, target_trip
+  where bs.bus_id = target_trip.bus_id and bs.seat_number = '3A'
+),
+new_booking as (
+  insert into public.bookings (user_id, trip_id, status, subtotal, discount, loyalty_discount, total_amount, expires_at)
+  select
+    (select id from auth.users where email = 'passenger2@palago.test'),
+    target_trip.trip_id, 'PAYMENT_PENDING', target_trip.fare, 0, 0, target_trip.fare, now() + interval '10 minutes'
+  from target_trip
+  returning id, trip_id, user_id, total_amount, expires_at
+),
+new_passenger as (
+  insert into public.booking_passengers (booking_id, user_id, seat_id, passenger_name, phone, passenger_type)
+  select new_booking.id, new_booking.user_id, target_seat.seat_id, 'Ana Villanueva', '09175556666', 'ADULT'
+  from new_booking, target_seat
+  returning booking_id
+)
+update public.trip_seats ts
+   set status = 'HELD', booking_id = new_booking.id, held_by = new_booking.user_id, held_until = new_booking.expires_at
+  from new_booking, target_seat, new_passenger
+ where ts.trip_id = new_booking.trip_id and ts.seat_id = target_seat.seat_id;
+
+insert into public.payments (booking_id, amount, currency, status, expires_at)
+select b.id, b.total_amount, 'PHP', 'PENDING', b.expires_at
+from public.bookings b
+where b.trip_id = (select trip_id from seed_extra_trips where label = 'LIVE')
+  and b.status = 'PAYMENT_PENDING';
+
+-- Its own statement for the same reason as Booking 1's — see the note there.
+select public.confirm_test_payment(p.reference, p.token, null)
+from public.payments p
+join public.bookings b on b.id = p.booking_id
+where b.trip_id = (select trip_id from seed_extra_trips where label = 'LIVE')
+  and p.status = 'PENDING';
+
+with ctx as (
+  select b.id as booking_id, b.booking_reference, b.user_id, b.trip_id
+  from public.bookings b
+  where b.trip_id = (select trip_id from seed_extra_trips where label = 'LIVE')
+    and b.user_id = (select id from auth.users where email = 'passenger2@palago.test')
+),
+scanner as (
+  select id as scanner_id from auth.users where email = 'assistant@palago.test'
+),
+board as (
+  update public.bookings
+     set status = 'BOARDED', checked_in_at = now() - interval '17 minutes', boarded_at = now() - interval '17 minutes'
+   where id = (select booking_id from ctx)
+  returning id
+),
+scan_validate as (
+  insert into public.qr_scans (booking_id, operator_user_id, trip_id, scan_type, result)
+  select ctx.booking_id, scanner.scanner_id, ctx.trip_id, 'VALIDATION', 'VALID'
+  from ctx, scanner, board
+  returning id
+),
+scan_board as (
+  insert into public.qr_scans (booking_id, operator_user_id, trip_id, scan_type, result)
+  select ctx.booking_id, scanner.scanner_id, ctx.trip_id, 'BOARDING', 'VALID'
+  from ctx, scanner, board
+  returning id
+)
+insert into public.notifications (user_id, type, title, message, data)
+select ctx.user_id, 'BOARDING', 'You have boarded',
+  'Boarding confirmed for ' || ctx.booking_reference || '. Have a safe trip.',
+  jsonb_build_object('bookingId', ctx.booking_id)
+from ctx, board;
+
+-- A second write to `bookings` in the same statement as `board` above would
+-- silently match zero rows (see the note on Booking 3), so moving the
+-- now-boarded passenger to ON_TRIP — what `start_trip` does the moment the
+-- bus actually leaves — is its own statement.
+update public.bookings b
+   set status = 'ON_TRIP'
+  from public.trips t
+ where b.trip_id = t.id
+   and t.id = (select trip_id from seed_extra_trips where label = 'LIVE')
+   and b.user_id = (select id from auth.users where email = 'passenger2@palago.test')
+   and b.status = 'BOARDED';
 
 commit;

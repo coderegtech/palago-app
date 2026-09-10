@@ -70,8 +70,8 @@ Then, before declaring the phase done:
 | 7 | Operator app — dashboard, travel data, manifest, crew, fleet | **Done** |
 | 8 | Realtime trip tracking, driver app, trip lifecycle, on-time rate | **Done** |
 | 9 | Mock wallet — balance, test top-ups, ledger, paying a booking | **Done** |
-| 10 | Loyalty | Next |
-| 11 | SOS | Not started |
+| 10 | Loyalty — points earned for completed trips, rewards catalogue, redemption | **Done** |
+| 11 | SOS | Next |
 | 12 | Notifications | Not started |
 | 13 | Security review | Not started |
 | 14 | Testing | Not started |
@@ -326,10 +326,35 @@ wallet leaves the booking untouched rather than half-paid.
 *Unverified:* nothing in this phase has run on hardware; it was verified in the browser and against
 the database.
 
-### Phases 10–12 — Loyalty, SOS, Notifications
+### Phase 10 — Loyalty ✅
 
-Loyalty points awarded only after a completed booking and idempotently; SOS with press-and-hold plus
-location capture; in-app and push notifications.
+Points balance and an append-only signed ledger, lifetime points, the rewards catalogue
+(fixed-amount and capped-percentage discounts — no unenforced "perk" rewards), redemption against
+an unpaid booking, and the passenger rewards screen.
+
+*Exit criteria — all met, verified by `pnpm db:verify:loyalty` (49 checks):* points are **earned
+only for travelling** — awarded inside `end_trip` when a booking becomes `COMPLETED`, computed from
+what was actually paid, and **exactly once** (a unique index, not an `if not exists`); redeeming
+applies a server-computed discount and stakes the points; cancelling the redemption, cancelling the
+booking, or refunding it all return the staked points, and a redeem/undo loop never inflates
+`lifetime_points`; one reward per booking; a client cannot write a balance, a ledger row, or make a
+reward cheaper.
+
+*Design notes:*
+- **Balance and ledger move together** in `loyalty_post` (private, not granted), the same shape as
+  the Phase 9 wallet. Signed amounts, so `sum(points) = points_balance` is one checkable invariant.
+- `lifetime_points` only ever rises and only counts `EARNED` / `BONUS` — spending a point does not
+  undo the fact that you earned it, and returning a staked point does not re-earn it.
+- Awarding at payment would be easier and wrong: a passenger who pays and never boards would collect
+  points for an empty seat, and a refund would then have to claw them back.
+
+*Unverified:* nothing in this phase has run on hardware; verified in the browser and against the
+database.
+
+### Phases 11–12 — SOS, Notifications
+
+SOS with press-and-hold plus location capture; in-app feed and push notifications (the rows are
+already written by payment, boarding and loyalty — the feed and push delivery are not).
 
 *Setup:* Phase 12 needs Expo push credentials for real device delivery.
 

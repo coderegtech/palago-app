@@ -45,8 +45,9 @@ coach and winding road, with the sea and islands to the right — is the source 
 
 | Form | File | Used for |
 |---|---|---|
-| Raster | `assets/images/icon.png` | In-app rendering (`PalaGoMark`, via `expo-image`), the app icon, and the base for `splash-icon.png` / `favicon.png` / the Android adaptive layers |
-| SVG | `assets/brand/palago-icon.svg` | A traced vector recreation, kept for `generate-icons.mjs` to fall back to if the raster art isn't present |
+| Raster (source of truth) | `assets/brand/palago-icon-source.png` | What `generate-icons.mjs` actually rasterises from. Edit this to change the mark everywhere. |
+| Raster (generated) | `assets/images/icon.png` | In-app rendering (`PalaGoMark`, via `expo-image`) and the app icon. Generated — do not hand-edit. |
+| SVG | `assets/brand/palago-icon.svg` | A traced vector recreation, kept as the fallback `generate-icons.mjs` uses only when the raster source is absent |
 
 `PalaGoMark` renders `icon.png` directly through an `expo-image` `Image` rather than redrawing the
 artwork as SVG paths, so the in-app mark is pixel-identical to the shipped app icon and splash
@@ -55,8 +56,8 @@ screen.
 ### App icons
 
 `icon.png`, `splash-icon.png`, `favicon.png`, and the three Android adaptive layers in
-`assets/images/` are derived from the same source art. To regenerate them (e.g. after a redesign),
-drop the new art in as `assets/brand/palago-icon-source.png` (square, ideally 1024px or larger,
+`assets/images/` all come from one source, so the icon and the splash cannot drift apart. To change
+the mark, replace `assets/brand/palago-icon-source.png` (square, ideally 1024px or larger,
 transparent background) and run:
 
 ```bash
@@ -104,3 +105,22 @@ aligned.
 Carried from Phase 1 and not negotiable: 44px minimum touch targets, an `accessibilityLabel` on
 every icon-only control, and status never conveyed by colour alone — `Badge` and `Alert` always
 carry text.
+
+### Two rules the generator encodes
+
+- **The Android adaptive foreground is inset to ~62%.** Launchers crop adaptive icons to a circle or
+  squircle and parallax the layers, so art drawn to the edge loses the palm and the front of the
+  bus. `adaptiveForeground()` insets it into the safe zone.
+- **The adaptive *background* must stay a flat colour.** Android moves the two layers independently;
+  detail there slides around behind the foreground. It is `primary-soft` `#E6F2EC`.
+
+### The splash background has to stay light
+
+The mark is drawn for a light ground: the palm fronds, the road and the drop shadow are all dark
+green. On `primary` `#087443` they merge into the background and the logo reads as a floating bus
+and sun with its left half missing. The splash `backgroundColor` in `app.json` therefore needs to be
+a light value — `primary-soft` `#E6F2EC` matches the Android adaptive background, so the two read as
+the same brand.
+
+Changing it back to a dark colour means commissioning a light-knockout version of the mark, not just
+editing the hex.
