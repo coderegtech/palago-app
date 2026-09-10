@@ -1,14 +1,19 @@
 /**
- * Rasterises the PalaGo brand vector into the PNGs Expo needs.
+ * Rasterises the PalaGo brand art into the PNGs Expo needs.
  *
  *   node scripts/generate-icons.mjs
  *
- * Source of truth is assets/brand/palago-icon.svg — edit that, re-run this, and
- * never hand-edit the generated PNGs.
+ * Source of truth is assets/brand/palago-icon-source.png — the brand raster.
+ * Edit that, re-run this, and never hand-edit the generated PNGs in
+ * assets/images/, because the next run overwrites them.
  *
- * If you have the original brand raster art, drop it in as
- * assets/brand/palago-icon-source.png and this script will use it instead of
- * the vector.
+ * assets/brand/palago-icon.svg is the fallback, used only when the raster is
+ * absent. It is kept because a vector re-renders cleanly at any size, but the
+ * raster wins when present: it is the artwork the brand actually ships.
+ *
+ * Everything downstream comes from one image — the app icon, the splash mark,
+ * the favicon and all three Android adaptive layers — so the icon and the
+ * splash cannot drift apart.
  */
 
 import fs from 'node:fs';
@@ -93,10 +98,15 @@ async function solid(size, hex, out) {
 }
 
 await square(1024, 'icon.png');
-await square(512, 'splash-icon.png');
+// The splash mark is composited over `backgroundColor` from app.json, so it
+// stays on transparency and is generated big enough for a tablet's density.
+await square(1024, 'splash-icon.png');
 await square(196, 'favicon.png');
 await adaptiveForeground(1024, 'android-icon-foreground.png');
 await monochrome(1024, 'android-icon-monochrome.png');
+// The adaptive background must be a FLAT colour, not the artwork: Android
+// parallaxes the two layers independently, and detail here would slide around
+// behind the foreground. It is the pale mint from the brand palette.
 await solid(1024, '#E6F2EC', 'android-icon-background.png');
 
 console.log('done');

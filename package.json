@@ -1,5 +1,6 @@
 {
   "name": "palago-app",
+  "packageManager": "pnpm@10.30.3",
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
