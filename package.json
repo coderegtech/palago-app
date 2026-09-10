@@ -1,6 +1,9 @@
 {
   "name": "palago-app",
   "packageManager": "pnpm@10.30.3",
+  "engines": {
+    "node": ">=20"
+  },
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
@@ -69,7 +72,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "build-dev:android":"eas build --profile development --platform android",
+    "build-dev:android": "eas build --profile development --platform android",
     "start:dev-client": "expo start --dev-client",
     "typecheck": "tsc --noEmit",
     "test": "jest",
@@ -79,6 +82,7 @@
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
     "db:types": "supabase gen types typescript --local > src/types/database.ts",
+    "db:push:prod": "node scripts/db-push-prod.mjs",
     "db:verify": "node scripts/verify-rls.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "db:verify:booking": "node scripts/verify-booking.mjs",
@@ -89,7 +93,8 @@
     "db:verify:operator": "node scripts/verify-operator.mjs",
     "db:verify:tracking": "node scripts/verify-tracking.mjs",
     "db:verify:wallet": "node scripts/verify-wallet.mjs",
-    "db:verify:loyalty": "node scripts/verify-loyalty.mjs"
+    "db:verify:loyalty": "node scripts/verify-loyalty.mjs",
+    "build:web": "expo export --platform web"
   },
   "private": true
 }

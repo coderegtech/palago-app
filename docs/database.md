@@ -133,6 +133,18 @@ SQL. Two details are easy to get wrong and produce baffling errors:
 The Phase 2 sign-up trigger still fires for seeded users, so each gets a profile automatically;
 roles and operator membership are applied immediately afterwards.
 
+## Pushing migrations to production
+
+```bash
+SUPABASE_PROJECT_REF=<ref> pnpm db:push:prod -- --yes
+```
+
+Links to the given cloud project and runs `supabase db push`, applying every pending file under
+`supabase/migrations/`. **Schema only.** `supabase/seed.sql` is never applied by this script, or by
+any prod workflow — it is test accounts, test trips and test money, and AGENTS.md says explicitly it
+must never reach a real project. Needs `supabase login` to have been run once on the machine (or
+`SUPABASE_ACCESS_TOKEN` set) so the CLI is authenticated.
+
 ## Booking and seat reservation (Phase 4)
 
 | Migration | Contents |

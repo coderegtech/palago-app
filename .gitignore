@@ -53,3 +53,5 @@ example
 
 # Edge Function secrets
 supabase/functions/.env
+.vercel
+.env*

@@ -16,13 +16,15 @@ public test-payment page, built on Expo and Supabase.
 
 ## Status
 
-**Phase 6 of 15 — boarding.** The complete booking-to-paid journey works: trip search, a visual
-seat map, atomic seat reservation proven under concurrent contention, a payment QR, a public
-test-payment page, server-side confirmation with receipts, Realtime status so the app notices a
-payment confirmed on another device, and a signed boarding pass that an operator can scan — issued
-only after payment, and usable exactly once. Screens beyond that
-render a clearly-labelled placeholder naming the phase that will implement them; nothing is faked
-as working.
+**Phases 1–10 of 15 are built and verified.** The full passenger journey works end to end —
+trip search, a visual seat map, atomic seat reservation proven under concurrent contention, a
+payment QR, a public test-payment page, server-side confirmation with receipts, Realtime status,
+a signed boarding pass issued only after payment and usable once, a mock wallet with a signed
+ledger, and loyalty points earned for completed trips. The operator console (dashboard, travel
+data, manifest, fleet, crew, terminal scanner) and the driver app (duty board, trip lifecycle,
+GPS publishing, door scanner) are in. Screens for SOS and the notifications feed render a
+clearly-labelled placeholder naming the phase that will implement them; nothing is faked as
+working. A feature-by-feature reference is in [docs/features.md](docs/features.md).
 
 | Phase | Scope | State |
 |---|---|---|
@@ -33,9 +35,9 @@ as working.
 | 5 | Mock payment, payment QR, web payment page, receipts | **Done** |
 | 6 | Boarding QR generation and server-side validation | **Done** |
 | 7 | Operator app — dashboard, travel data, manifest, crew, fleet | **Done** |
-| 8 | Realtime trip tracking | Next |
+| 8 | Realtime trip tracking, driver app, trip lifecycle, on-time rate | **Done** |
 | 9 | Mock wallet, test top-ups, paying a booking from balance | **Done** |
-| 10 | Loyalty | Next |
+| 10 | Loyalty — points, rewards catalogue, redemption | **Done** |
 | 11 | SOS | Not started |
 | 12 | Notifications | Not started |
 | 13 | Security review | Not started |
@@ -137,11 +139,12 @@ any migration that touches one:
 pnpm db:verify:all
 ```
 
-31 RLS, 38 booking, 49 payment, 38 boarding, 34 operator, 52 tracking and 51 wallet checks —
-including eight simultaneous callers racing for one seat, confirming a payment five times to prove
-one receipt, six simultaneous scans to prove a ticket boards once, one operator trying to read a
-rival's manifest, revenue and fleet, a driver trying to rewrite the GPS trail they published, and
-eight concurrent top-ups to prove no centavo is lost.
+31 RLS, 38 booking, 49 payment, 38 boarding, 34 operator, 52 tracking, 51 wallet and 49 loyalty
+checks — including eight simultaneous callers racing for one seat, confirming a payment five times
+to prove one receipt, six simultaneous scans to prove a ticket boards once, one operator trying to
+read a rival's manifest, revenue and fleet, a driver trying to rewrite the GPS trail they
+published, eight concurrent top-ups to prove no centavo is lost, and a redeem/undo loop that must
+not inflate lifetime points.
 
 ## Project structure
 
@@ -163,7 +166,7 @@ src/
 supabase/
   migrations/     SQL migrations
   functions/      Edge Functions (Phase 5+)
-docs/             Architecture, auth, database, payment, QR, realtime, security, test accounts, testing
+docs/             Architecture, auth, database, deployment, payment, QR, realtime, security, test accounts, testing
 ```
 
 After changing a migration, regenerate the database types — never hand-edit them:
@@ -180,10 +183,12 @@ decided by the server and never accepted from the client. See [docs/security.md]
 
 ## Documentation
 
+- [features.md](docs/features.md) — what PalaGo does today, surface by surface
 - [architecture.md](docs/architecture.md)
 - [auth.md](docs/auth.md)
 - [brand.md](docs/brand.md)
 - [database.md](docs/database.md)
+- [deployment.md](docs/deployment.md) — the web build on Vercel, and what it does *not* deploy
 - [payment-flow.md](docs/payment-flow.md)
 - [phases.md](docs/phases.md) — the phased build process, gates and invariants
 - [qr-flow.md](docs/qr-flow.md)
