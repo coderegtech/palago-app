@@ -23,6 +23,7 @@
     "expo-font": "~57.0.3",
     "expo-glass-effect": "~57.0.1",
     "expo-image": "~57.0.4",
+    "expo-image-picker": "~57.0.16",
     "expo-linear-gradient": "~57.0.1",
     "expo-linking": "~57.0.9",
     "expo-location": "~57.0.16",
@@ -86,7 +87,7 @@
     "db:verify": "node scripts/verify-rls.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "db:verify:booking": "node scripts/verify-booking.mjs",
-    "db:verify:all": "node scripts/verify-rls.mjs && node scripts/verify-booking.mjs && node scripts/verify-payment.mjs && node scripts/verify-boarding.mjs && node scripts/verify-operator.mjs && node scripts/verify-tracking.mjs && node scripts/verify-wallet.mjs && node scripts/verify-loyalty.mjs",
+    "db:verify:all": "node scripts/verify-rls.mjs && node scripts/verify-booking.mjs && node scripts/verify-payment.mjs && node scripts/verify-boarding.mjs && node scripts/verify-operator.mjs && node scripts/verify-tracking.mjs && node scripts/verify-wallet.mjs && node scripts/verify-loyalty.mjs && node scripts/verify-sos.mjs && node scripts/verify-discount.mjs && node scripts/verify-admin.mjs",
     "db:verify:payment": "node scripts/verify-payment.mjs",
     "functions:serve": "supabase functions serve --env-file supabase/functions/.env",
     "db:verify:boarding": "node scripts/verify-boarding.mjs",
@@ -94,7 +95,10 @@
     "db:verify:tracking": "node scripts/verify-tracking.mjs",
     "db:verify:wallet": "node scripts/verify-wallet.mjs",
     "db:verify:loyalty": "node scripts/verify-loyalty.mjs",
-    "build:web": "expo export --platform web"
+    "db:verify:sos": "node scripts/verify-sos.mjs",
+    "db:verify:admin": "node scripts/verify-admin.mjs",
+    "build:web": "expo export --platform web",
+    "db:verify:discount": "node scripts/verify-discount.mjs"
   },
   "private": true
 }

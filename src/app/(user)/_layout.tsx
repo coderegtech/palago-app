@@ -71,6 +71,7 @@ export default function UserLayout() {
         <Tabs.Screen name="notifications" options={{ href: null }} />
         <Tabs.Screen name="tracking" options={{ href: null }} />
         <Tabs.Screen name="sos" options={{ href: null }} />
+        <Tabs.Screen name="discount" options={{ href: null }} />
       </Tabs>
     </AuthGate>
   );

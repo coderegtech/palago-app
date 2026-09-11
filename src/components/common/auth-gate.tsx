@@ -21,8 +21,9 @@ export function homeRouteForRole(role: UserRole | undefined): Href {
     case UserRole.DRIVER:
     case UserRole.ASSISTANT:
       return '/(driver)/duty';
-    case UserRole.USER:
     case UserRole.ADMIN:
+      return '/(admin)/overview';
+    case UserRole.USER:
     default:
       return '/(user)/home';
   }

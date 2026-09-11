@@ -115,6 +115,15 @@ export const Fonts = Platform.select({
 export const MaxContentWidth = 720;
 
 /**
+ * The same, for the admin console.
+ *
+ * Wider because a dashboard is scanned in columns rather than read in a line:
+ * 720 is a comfortable measure for a booking flow on a phone and leaves a
+ * desktop dashboard stranded in the middle of the screen beside its sidebar.
+ */
+export const AdminContentMaxWidth = 1280;
+
+/**
  * Colour slice of the react-navigation theme. Merged over `DefaultTheme` in the
  * root layout so the navigator's own font descriptors stay untouched.
  */

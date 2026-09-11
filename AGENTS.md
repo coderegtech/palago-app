@@ -84,6 +84,13 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
 - **A wallet payment must produce a real `payments` row and receipt.** The boarding pass, the
   operator manifest and the revenue totals all read those; a wallet payment that only moved a
   balance would leave a passenger who paid looking unpaid at the door.
+- **An authorisation check comparing against a nullable column must be `coalesce(…, false)`.**
+  `current_operator_id()` is NULL for a passenger, so `p_operator_id = public.current_operator_id()`
+  is NULL, `public.is_admin() or NULL` is NULL, and `if not NULL then raise` never fires. The first
+  cut of `create_bus` therefore let any signed-in passenger add a bus to any operator's fleet, with
+  no error returned. Comparisons inside an `exists (…)` subquery are safe (no rows means false); a
+  bare comparison in an `if` is not. Assert the *effect* in the verify suite, not just the error
+  message — checking only the message would have passed that function.
 - **Run `pnpm db:verify` after any migration touching a policy** — 31 RLS checks against real
   signed-in roles. Unit tests cannot cover RLS.
 - **Do not set `"jsx"` in tsconfig.json.** `expo/tsconfig.base` sets `react-jsx`; overriding it with
@@ -98,6 +105,29 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
   are native-only and leak to the DOM on web as unknown React attributes.
 - **App icons are generated** from `assets/brand/palago-icon.svg` by `node scripts/generate-icons.mjs`.
   Never hand-edit the PNGs in `assets/images/`. Palette and logo rules: docs/brand.md.
+- **A claimed passenger type is not a discount.** `booking_passengers.passenger_type` comes straight
+  from the client. It was harmless while it did not touch the price; since the senior/student/PWD
+  discount, it does. `reserve_seats` therefore keys the 20% off an APPROVED `discount_eligibilities`
+  row — which no client can write — never off the claimed type alone. Anything new that prices by
+  passenger type must do the same, or typing SENIOR becomes a free 20% off.
+- **Uploading an ID is not approval.** A `discount_eligibilities` row starts PENDING and discounts
+  nothing until an operator or admin approves it through `review_discount_eligibility`. The proof
+  bucket `discount-proofs` is private and holds government IDs: read them only through a short-lived
+  signed URL, never a public one.
+- **Do not set the image picker's `cameraPermission` to `false`.** It looks like the way to stop the
+  picker touching the camera, but it *blocks* `android.permission.CAMERA` and breaks the boarding
+  scanner. Leaving it unset is also wrong — the picker then overwrites the scanner's permission text
+  with Expo's generic one. `app.json` gives it the scanner's exact string, so either plugin order
+  produces the right prompt.
+- **The `verify-*.mjs` scripts read `.env` straight from disk and ignore the shell.** You cannot
+  override the target with `EXPO_PUBLIC_SUPABASE_URL=… node scripts/…`. If `.env` points at the
+  hosted project, `pnpm db:verify:all` writes test bookings, payments and wallet top-ups into
+  production. Point `.env` at the local stack before running them.
+- **The verify suites are only meaningful straight after `pnpm db:reset`.** Tracking and loyalty
+  consume seed state — they depart the seeded trips and award points — so a second run fails on
+  "a SCHEDULED Cherry trip exists" and "with no points", with no code having changed. Reset, then
+  run once. Warm the Edge runtime first (one throwaway request): the first call against a cold
+  container fails, and it surfaces as the tampered-signature check failing.
 
 ## Commands
 

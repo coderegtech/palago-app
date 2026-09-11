@@ -2,7 +2,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { View } from 'react-native';
-import { Mail, ShieldCheck } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { IdCard, Mail, ShieldCheck } from 'lucide-react-native';
 
 import { FormInput } from '@/components/common/form-input';
 import { SignOutButton } from '@/components/common/sign-out-button';
@@ -22,6 +23,7 @@ import { profileSchema, type ProfileInput } from '@/schemas/auth';
 import { useUIStore } from '@/stores/ui-store';
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const { email } = useAuth();
   const { data: profile, isPending, isError, refetch } = useProfile();
   const updateProfile = useUpdateProfile();
@@ -165,6 +167,22 @@ export default function ProfileScreen() {
         disabled={!formState.isDirty}
         onPress={onSave}
       />
+
+      <Divider className="my-6" />
+
+      <Text variant="label" tone="muted" className="mb-3">
+        Fares
+      </Text>
+
+      <Button
+        label="Discount verification"
+        variant="outline"
+        icon={<IdCard size={18} color={Colors.primary} />}
+        onPress={() => router.push('/discount')}
+      />
+      <Text variant="caption" tone="muted" className="mt-2">
+        Seniors, students and persons with disability travel at 20% off once an ID is approved.
+      </Text>
 
       <Divider className="my-6" />
 

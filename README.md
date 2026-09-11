@@ -22,9 +22,10 @@ payment QR, a public test-payment page, server-side confirmation with receipts, 
 a signed boarding pass issued only after payment and usable once, a mock wallet with a signed
 ledger, and loyalty points earned for completed trips. The operator console (dashboard, travel
 data, manifest, fleet, crew, terminal scanner) and the driver app (duty board, trip lifecycle,
-GPS publishing, door scanner) are in. Screens for SOS and the notifications feed render a
-clearly-labelled placeholder naming the phase that will implement them; nothing is faked as
-working. A feature-by-feature reference is in [docs/features.md](docs/features.md).
+GPS publishing, door scanner) are in, as are passenger-raised emergency alerts with the operator
+response workflow behind them. The notifications feed renders a clearly-labelled placeholder
+naming the phase that will implement it; nothing is faked as working. A feature-by-feature
+reference is in [docs/features.md](docs/features.md).
 
 | Phase | Scope | State |
 |---|---|---|
@@ -38,7 +39,7 @@ working. A feature-by-feature reference is in [docs/features.md](docs/features.m
 | 8 | Realtime trip tracking, driver app, trip lifecycle, on-time rate | **Done** |
 | 9 | Mock wallet, test top-ups, paying a booking from balance | **Done** |
 | 10 | Loyalty — points, rewards catalogue, redemption | **Done** |
-| 11 | SOS | Not started |
+| 11 | SOS — emergency alerts, location capture, operator response workflow | **Done** |
 | 12 | Notifications | Not started |
 | 13 | Security review | Not started |
 | 14 | Testing | Not started |
@@ -139,12 +140,14 @@ any migration that touches one:
 pnpm db:verify:all
 ```
 
-31 RLS, 38 booking, 49 payment, 38 boarding, 34 operator, 52 tracking, 51 wallet and 49 loyalty
-checks — including eight simultaneous callers racing for one seat, confirming a payment five times
-to prove one receipt, six simultaneous scans to prove a ticket boards once, one operator trying to
-read a rival's manifest, revenue and fleet, a driver trying to rewrite the GPS trail they
-published, eight concurrent top-ups to prove no centavo is lost, and a redeem/undo loop that must
-not inflate lifetime points.
+446 checks across eleven suites — 31 RLS, 38 booking, 49 payment, 38 boarding, 34 operator, 52
+tracking, 51 wallet, 49 loyalty, 40 SOS, 33 discount and 31 admin — including eight simultaneous
+callers racing for one seat, confirming a payment five times to prove one receipt, six simultaneous
+scans to prove a ticket boards once, one operator trying to read a rival's manifest, revenue and
+fleet, a driver trying to rewrite the GPS trail they published, eight concurrent top-ups to prove
+no centavo is lost, a redeem/undo loop that must not inflate lifetime points, a panicking second
+press of the SOS button that must not raise a second emergency, and a passenger trying to add a bus
+to someone else's fleet — which is a real hole this suite caught.
 
 ## Project structure
 

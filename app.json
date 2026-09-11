@@ -43,6 +43,13 @@
         }
       ],
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "PalaGo asks for a photo only when you upload your ID to verify a senior, student or PWD fare discount. The photo is private and seen only by the staff who review it.",
+          "cameraPermission": "PalaGo uses the camera only to scan boarding passes. Nothing is recorded or uploaded."
+        }
+      ],
+      [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "PalaGo shares the bus position with passengers on the trip you are driving, while the trip is running.",
@@ -56,7 +63,7 @@
         {
           "backgroundColor": "#E6F2EC",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 96
         }
       ]
     ],

@@ -145,6 +145,16 @@ any prod workflow — it is test accounts, test trips and test money, and AGENTS
 must never reach a real project. Needs `supabase login` to have been run once on the machine (or
 `SUPABASE_ACCESS_TOKEN` set) so the CLI is authenticated.
 
+### Seeding a staging / demo project
+
+To sign in to a hosted deployment you need accounts there. `supabase/seed.cloud.sql` is a trimmed,
+re-runnable version of the seed with **accounts and schedule only** — the seven test accounts, the
+two operators, terminals, routes, buses, seat layouts, crew and a rolling set of trips — and none
+of the fabricated bookings, payments, receipts, wallet balances, loyalty points or scans. Run it
+**after** the migrations are pushed, from the Supabase Studio SQL editor or with
+`psql "<connection string>" -f supabase/seed.cloud.sql`. Point it at a staging/demo project, never
+at a system meant to be a record of truth.
+
 ## Booking and seat reservation (Phase 4)
 
 | Migration | Contents |

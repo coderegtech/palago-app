@@ -10,6 +10,12 @@ export interface ScreenProps extends ViewProps {
   edges?: readonly Edge[];
   /** Remove the default horizontal padding for edge-to-edge content. */
   padded?: boolean;
+  /**
+   * Widen the content column past the default reading width. The admin console
+   * is the case for this: 720px is right for a booking flow on a phone and far
+   * too narrow for a dashboard laid out beside a sidebar.
+   */
+  maxWidth?: number;
   className?: string;
   contentClassName?: string;
 }
@@ -22,6 +28,7 @@ export function Screen({
   scroll = false,
   edges = ['top', 'left', 'right'],
   padded = true,
+  maxWidth = MaxContentWidth,
   children,
   className,
   contentClassName,
@@ -29,7 +36,7 @@ export function Screen({
 }: ScreenProps) {
   const content = (
     <View
-      style={{ maxWidth: MaxContentWidth }}
+      style={{ maxWidth }}
       className={cn('w-full flex-1 self-center', padded && 'px-4', contentClassName)}>
       {children}
     </View>
