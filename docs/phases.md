@@ -71,8 +71,8 @@ Then, before declaring the phase done:
 | 8 | Realtime trip tracking, driver app, trip lifecycle, on-time rate | **Done** |
 | 9 | Mock wallet — balance, test top-ups, ledger, paying a booking | **Done** |
 | 10 | Loyalty — points earned for completed trips, rewards catalogue, redemption | **Done** |
-| 11 | SOS | Next |
-| 12 | Notifications | Not started |
+| 11 | SOS — emergency alerts, operator response workflow | **Done** |
+| 12 | Notifications | Next |
 | 13 | Security review | Not started |
 | 14 | Testing | Not started |
 | 15 | Production preparation | Not started |
@@ -351,12 +351,50 @@ reward cheaper.
 *Unverified:* nothing in this phase has run on hardware; verified in the browser and against the
 database.
 
-### Phases 11–12 — SOS, Notifications
+### Phase 11 — SOS ✅
 
-SOS with press-and-hold plus location capture; in-app feed and push notifications (the rows are
-already written by payment, boarding and loyalty — the feed and push delivery are not).
+Passenger-raised emergency alerts with location capture, and the operator-side workflow that drives
+one through acknowledge → responding → resolved.
 
-*Setup:* Phase 12 needs Expo push credentials for real device delivery.
+*Setup:* `expo-location` (already installed for Phase 8, foreground only).
+
+*Exit criteria — all met, verified by `pnpm db:verify:sos` (40 checks):* a passenger can raise an
+alert and **a second press while it is still open returns the same alert**, not a second emergency;
+`sos_incidents` has no client write path at all — nobody can INSERT, UPDATE or DELETE a row,
+including the passenger who raised it and the operator responding to it; the operator running the
+trip sees it and a **rival operator sees nothing and cannot acknowledge or resolve it**; another
+passenger and an anonymous caller see nothing; the transitions are idempotent, a resolved alert
+cannot be walked backwards, and the passenger may cancel their own false alarm but **not once a
+responder is already on the way**; every transition is audited and notified.
+
+*Design notes:*
+- **One open alert per passenger**, enforced by a partial unique index rather than a check in the
+  function. Someone in trouble presses the button repeatedly; `trigger_sos` catches the violation
+  and returns the alert that already exists with `alreadyOpen: true`. A second row would split one
+  emergency into two half-attended ones.
+- **The trip is resolved server-side** from the caller's own booking. A client-supplied `trip_id`
+  would let anyone attach an alert to a trip they are not on, and the operator scoping is built on
+  that column.
+- **`trip_id` is nullable on purpose.** An emergency before boarding is still an emergency, so the
+  alert is not refused for want of an active booking — it simply has no operator to scope to, and
+  is visible to admins only.
+- Status transitions share one private `sos_advance`, so the guard, the lock, the idempotent branch,
+  the audit row and the notification exist once rather than four times.
+- **No promise the app cannot keep.** The screen does not say "help is on the way" until a responder
+  has actually said so, and it says plainly that PalaGo does not contact emergency services for you.
+- The operator's resolve dialog is a `Modal` with a text field, not `Alert.prompt` — that exists
+  only on iOS, so on Android and web the operator would tap Resolve and watch nothing happen.
+
+*Unverified:* nothing in this phase has run on hardware. `expo-location` is exercised only through
+its permission and error states on web; the capture itself needs a development build, the same gap
+Phase 8 records.
+
+### Phase 12 — Notifications
+
+In-app feed and push delivery. The rows are already written by payment, boarding, loyalty and SOS —
+the feed that displays them and the push transport are not.
+
+*Setup:* needs Expo push credentials for real device delivery.
 
 ### Phase 13 — Security review
 
@@ -397,6 +435,9 @@ Scope moves between phases are recorded here rather than left implicit.
 | `BoardingScanner` extracted | 8 | Crew scan at the door and operators scan at the terminal; two copies of the scan-result wording would drift |
 | `refund_test_payment` rewritten | 9 | A wallet-paid booking refunded without crediting the wallet back would lose the passenger's test money; the refund now returns it to where it came from |
 | Wallet balance on the home screen | 9 | Phase 8's home screen said "wallet and rewards are not built yet"; half of that stopped being true |
+| SOS schema rewritten before it ever applied | 11 | The first cut referenced `trip_assignments.assigned_to` and an `audit_log_trigger()` that does not exist, so `db:reset` and `db:push` both failed outright. Rewritten to the conventions the other ten phases use — a real enum, bounded coordinates, `search_path = ''`, grants, no client write path — rather than patched to merely apply |
+| `cancel_sos` and `respond_sos` | 11 (added) | `SOSStatus` already carried RESPONDING and CANCELLED, and nothing set either. A status an enum promises and no code path reaches is a lie in the type |
+| Admin console | Unplanned, built on request | Not in the fifteen-phase plan. An ADMIN previously landed on the passenger home with no surface of their own, and reference data could only be added by editing `seed.sql`. Scope was held to analytics plus operators, terminals, routes and buses; trip scheduling stays with the operator console |
 
 ## Commands
 

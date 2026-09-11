@@ -799,6 +799,41 @@ insert into public.qr_scans (operator_user_id, scan_type, result)
 select id, 'VALIDATION', 'INVALID_QR' from auth.users where email = 'operator@palago.test';
 
 -- ---------------------------------------------------------------------------
+-- One closed emergency alert, on the trip that has already finished.
+--
+-- Inserted directly rather than through `trigger_sos`, because that function
+-- reads `auth.uid()` and this script has no session — the same reason the
+-- bookings above are built by hand. The row is the exact shape the function
+-- leaves behind once an operator has worked it through to RESOLVED.
+--
+-- Deliberately *closed*: an alert left ACTIVE in seed data would show every
+-- developer a standing emergency on the operator dashboard that no one is
+-- attending to.
+-- ---------------------------------------------------------------------------
+
+insert into public.sos_incidents (
+  user_id, booking_id, trip_id, latitude, longitude, status, note,
+  created_at, acknowledged_at, acknowledged_by, responding_at, resolved_at, resolved_by
+)
+select
+  b.user_id,
+  b.id,
+  b.trip_id,
+  10.345700, 118.997800,
+  'RESOLVED',
+  'Passenger felt unwell. Crew stopped at Roxas; passenger continued after a rest.',
+  t.actual_departure_at + interval '135 minutes',
+  t.actual_departure_at + interval '138 minutes',
+  (select id from auth.users where email = 'operator@palago.test'),
+  t.actual_departure_at + interval '141 minutes',
+  t.actual_departure_at + interval '190 minutes',
+  (select id from auth.users where email = 'operator@palago.test')
+from public.bookings b
+join public.trips t on t.id = b.trip_id
+where t.id = (select trip_id from seed_extra_trips where label = 'HISTORICAL')
+  and b.user_id = (select id from auth.users where email = 'passenger2@palago.test');
+
+-- ---------------------------------------------------------------------------
 -- Booking 6: Trip D (Cherry, Puerto Princesa to Roxas), two seats, a
 -- redeemed reward and payment from the wallet. The redemption needs points,
 -- which is why this runs after Booking 5 above has already credited some.

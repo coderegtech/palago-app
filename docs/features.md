@@ -4,9 +4,9 @@ What PalaGo does today, surface by surface. This is a functional reference — t
 "why" behind each design sits in the topic docs linked throughout, and the build
 order and gates are in [phases.md](phases.md).
 
-Phases 1–10 are built and verified. Phases 11–15 (SOS, notifications feed,
-security review, test broadening, production prep) are not — the two screens that
-belong to them render a labelled `PlaceholderScreen` naming the phase.
+Phases 1–11 are built and verified. Phases 12–15 (notifications feed, security
+review, test broadening, production prep) are not — the one screen that belongs
+to them renders a labelled `PlaceholderScreen` naming the phase.
 
 ## What this is not
 
@@ -158,6 +158,76 @@ PalaGo guessed is worse off than one told nothing.
 > authorisation, the Realtime updates, the honest states — is verified via the
 > server and the web placeholder. See [realtime.md](realtime.md).
 
+### Emergency assistance — `(user)/sos`
+
+A passenger raises an alert; it captures where they are and reaches the operator
+running their trip. The trip is resolved **server-side** from the caller's own
+booking — a client-supplied trip id would let anyone attach an alert to a trip
+they are not on.
+
+- **One open alert per passenger**, enforced by a partial unique index. Pressing
+  again while one is open returns that alert (`alreadyOpen: true`) rather than
+  splitting one emergency into two half-attended ones.
+- The passenger can **cancel their own false alarm** — but not once a responder
+  is already on the way. That call belongs to the people responding.
+- Each stage is named as it happens (sent → seen by operator → responder on the
+  way → resolved). The screen does not claim help is coming before a responder
+  has said so, and says plainly that PalaGo does not call emergency services for
+  you.
+- `sos_incidents` has **no client write path at all** — no INSERT, UPDATE or
+  DELETE for anyone, including the passenger who raised it and the operator
+  working it. An alert is a record.
+
+---
+
+## Admin console — `(admin)`
+
+Signing in as an ADMIN now lands on `/(admin)/overview` rather than the
+passenger home. Five destinations, named so they cannot collide with existing
+routes (route groups do not appear in the URL, so `overview` not `dashboard`,
+`fleet` not `buses`).
+
+**Desktop-first, still responsive.** A persistent sidebar from `md` up — full
+labels at `lg`, an icon rail between — and a bottom bar below it. The shell is a
+`Slot` rather than `Tabs` because React Navigation's bottom-tabs can only place
+its bar beneath the content, and a dashboard's chrome belongs beside it; the
+admin screens are flat lists with no nested stacks, so no per-tab navigation
+state is given up. Sign-out lives in the sidebar footer on desktop and on the
+Overview screen below it, since the bottom bar has no room and the console can
+have no Account tab (`account.tsx` would collide with the operator console's).
+
+**Records are tables, edits are modals.** `DataTable` renders a real table on a
+wide screen and a list of labelled cards on a phone, both driven by one column
+definition so a header can never drift from the cells under it. Columns marked
+`primary` become the card's title in stacked mode. A table narrower than its
+`minWidth` scrolls sideways rather than crushing its columns. Every insert is a
+form modal over the table, validated against the same bounds the schema
+enforces — coordinate ranges, distinct origin and destination, capacity 1–100 —
+so the form refuses what the database would refuse anyway.
+
+| Screen | What it does |
+|---|---|
+| **Overview** | Platform-wide analytics from `admin_dashboard` — today's trips, passengers, boarded, revenue and on-time rate across every operator, lifetime bookings and revenue, reference-data counts, and the same figures broken out per operator |
+| **Operators** | List and create bus companies |
+| **Terminals** | List and create stations, with latitude/longitude validated against the same bounds the schema enforces |
+| **Routes** | List and create corridors, picking operator, origin and destination |
+| **Fleet** | Every coach across all operators, and `create_bus` to add one |
+
+Two things needed server code; the rest did not. `admin_dashboard` exists
+because the operator views are scoped through `current_operator_id()` and an
+admin has no operator — `operator_dashboard` correctly returns `NO_OPERATOR` for
+them. `create_bus` exists because a coach and its `bus_seats` must arrive
+together: a bus with no seat rows looks sellable but cannot be booked, and the
+2+2 layout is generated from `capacity` server-side so the two cannot disagree.
+
+Operators, terminals and routes stay ordinary RLS-guarded inserts. The Phase 3a
+policies already carried `or public.is_admin()`, and wrapping standalone rows in
+a function would enforce nothing the policy does not.
+
+The admin's revenue figure for an operator is asserted equal to what that
+operator sees on its own dashboard, so the two consoles cannot drift apart about
+money.
+
 ---
 
 ## Public payment page — `/payment/[reference]`
@@ -197,6 +267,7 @@ a rival's data twice during the build.
 | **Fleet** | Buses from `operator_fleet` (a dedicated view — reading `buses` directly showed a Cherry account RoRo's coaches) |
 | **Crew** | Drivers and assistants, add-crew, and a status toggle (active / suspended) — an operator cannot touch another operator's roster |
 | **Scanner** | Validate and board tickets at the terminal (see Boarding below) |
+| **SOS panel** | Open emergency alerts raised on this operator's trips, with acknowledge / responding / resolve. Live over Realtime *and* polled — a console that missed an alert because a websocket dropped is worse than one that refetches too often. Empty state says so honestly, which it could not before Phase 11 |
 | **Account** | Operator profile, sign out (named `account.tsx`, not `profile.tsx`, to avoid a route collision with the passenger screen) |
 
 Verified by `pnpm db:verify:operator` (34 checks): an operator sees only its own
@@ -308,9 +379,10 @@ Details and the MapLibre web/native split are in [realtime.md](realtime.md).
 
 ## Data-integrity guarantees (proven, not assumed)
 
-`pnpm db:verify:all` — 31 RLS, 38 booking, 49 payment, 38 boarding, 34 operator,
-52 tracking, 51 wallet, 49 loyalty checks — signs in as each real role through
-the publishable key and asserts, among much else:
+`pnpm db:verify:all` — 446 checks across eleven suites (31 RLS, 38 booking, 49
+payment, 38 boarding, 34 operator, 52 tracking, 51 wallet, 49 loyalty, 40 SOS,
+33 discount, 31 admin) — signs in as each real role through the publishable key
+and asserts, among much else:
 
 - eight simultaneous callers race for one seat → exactly one wins; overlapping
   seat sets in opposite orders do not deadlock; expired holds return to available
@@ -324,6 +396,9 @@ the publishable key and asserts, among much else:
 - one operator cannot read a rival's manifest, revenue or fleet, or touch its crew
 - a driver cannot rewrite the GPS trail they published
 - `start_trip` / `end_trip` retries do not move a recorded timestamp
+- a second SOS press returns the open alert instead of raising a second
+  emergency; no client can INSERT, UPDATE or DELETE an incident; a rival
+  operator can neither see nor act on one
 
 ---
 
@@ -331,8 +406,7 @@ the publishable key and asserts, among much else:
 
 | Phase | Feature | Current state |
 |---|---|---|
-| 11 | **SOS** — press-and-hold with location capture, operator alerting | `PlaceholderScreen` at `(user)/sos` |
-| 12 | **Notifications feed** — in-app list + push delivery (rows are already written by payment/boarding/loyalty; the feed and push are not) | `PlaceholderScreen` at `(user)/notifications` |
+| 12 | **Notifications feed** — in-app list + push delivery (rows are already written by payment, boarding, loyalty and SOS; the feed and push are not) | `PlaceholderScreen` at `(user)/notifications` |
 | 13 | Security review — work the attack list in [security.md](security.md) | — |
 | 14 | Testing — broaden to the full scenario list in [testing.md](testing.md) | — |
 | 15 | Production preparation — performance, monitoring, logging, env separation, deployment | — |

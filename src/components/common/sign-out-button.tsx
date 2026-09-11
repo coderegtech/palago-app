@@ -5,6 +5,7 @@ import { LogOut } from 'lucide-react-native';
 
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { IconButton } from '@/components/ui/icon-button';
 import { Modal } from '@/components/ui/modal';
 import { Colors } from '@/constants/theme';
 import { useSignOut } from '@/hooks/use-auth-mutations';
@@ -14,19 +15,36 @@ import { useSignOut } from '@/hooks/use-auth-mutations';
  * profiles so both get the same guard against an accidental tap — losing a
  * session mid-trip is worse than one extra tap.
  */
-export function SignOutButton({ className }: { className?: string }) {
+export function SignOutButton({
+  className,
+  compact = false,
+}: {
+  className?: string;
+  /** Icon only, for the admin console's collapsed sidebar rail. */
+  compact?: boolean;
+}) {
   const [confirming, setConfirming] = useState(false);
   const signOut = useSignOut();
 
   return (
     <>
-      <Button
-        label="Sign out"
-        variant="ghost"
-        className={className}
-        icon={<LogOut size={18} color={Colors.primary} />}
-        onPress={() => setConfirming(true)}
-      />
+      {compact ? (
+        <IconButton
+          accessibilityLabel="Sign out"
+          variant="plain"
+          className={className}
+          onPress={() => setConfirming(true)}>
+          <LogOut size={18} color={Colors.primary} />
+        </IconButton>
+      ) : (
+        <Button
+          label="Sign out"
+          variant="ghost"
+          className={className}
+          icon={<LogOut size={18} color={Colors.primary} />}
+          onPress={() => setConfirming(true)}
+        />
+      )}
 
       <Modal
         visible={confirming}
