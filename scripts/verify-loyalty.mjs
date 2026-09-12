@@ -20,23 +20,9 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import fs from 'node:fs';
-import path from 'node:path';
+import { loadVerifyEnv } from './_verify-env.mjs';
 
-const root = path.resolve(import.meta.dirname, '..');
-const env = Object.fromEntries(
-  fs
-    .readFileSync(path.join(root, '.env'), 'utf8')
-    .split('\n')
-    .filter((l) => l.includes('=') && !l.trim().startsWith('#'))
-    .map((l) => {
-      const i = l.indexOf('=');
-      return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
-    }),
-);
-
-const URL_ = env.EXPO_PUBLIC_SUPABASE_URL;
-const KEY = env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const { url: URL_, key: KEY } = loadVerifyEnv();
 const PASSWORD = 'PalawanGo2026';
 
 const client = () => createClient(URL_, KEY, { auth: { persistSession: false } });
@@ -93,24 +79,16 @@ async function ledgerSum(session) {
 
 /** Book seats, pay by wallet, and board every passenger on the trip. */
 async function bookAndBoard(session, tripId, count = 1) {
-  const { data: seats } = await session.supabase
-    .from('trip_seats')
-    .select('seat_id')
-    .eq('trip_id', tripId)
-    .eq('status', 'AVAILABLE')
-    .limit(count);
-
-  const { data: booking, error } = await session.supabase.rpc('reserve_seats', {
+  const { data: booking, error } = await session.supabase.rpc('create_booking', {
     p_trip_id: tripId,
-    p_passengers: seats.map((s, i) => ({
-      seatId: s.seat_id,
+    p_passengers: Array.from({ length: count }, (_unused, i) => ({
       name: `Loyalty ${i + 1}`,
       phone: '09171234567',
       email: null,
       type: 'ADULT',
     })),
   });
-  if (error) throw new Error(`reserve: ${error.message}`);
+  if (error) throw new Error(`create_booking: ${error.message}`);
   return booking;
 }
 
@@ -126,8 +104,11 @@ async function bookAndBoard(session, tripId, count = 1) {
 async function completeTripCycle(session, tripId) {
   const booking = await bookAndBoard(session, tripId, 1);
   await payByQr(session, booking.bookingId);
-  await driver.supabase.rpc('start_trip', { p_trip_id: tripId });
 
+  // Open boarding, board at this trip, then depart. This suite used to depart
+  // first and board afterwards, which only worked because boarding never
+  // checked that the bus was still at the door.
+  await driver.supabase.rpc('set_trip_boarding', { p_trip_id: tripId });
   const pass = await invoke('get-boarding-pass', { bookingId: booking.bookingId }, session.accessToken);
   await invoke(
     'confirm-boarding',
@@ -138,9 +119,11 @@ async function completeTripCycle(session, tripId) {
         reference: pass.body.data.reference,
         token: pass.body.data.token,
       }),
+      tripId,
     },
     driver.accessToken,
   );
+  await driver.supabase.rpc('start_trip', { p_trip_id: tripId });
 
   const ended = await driver.supabase.rpc('end_trip', { p_trip_id: tripId });
   return { booking, pointsAwarded: ended.data?.pointsAwarded ?? 0 };
@@ -148,10 +131,12 @@ async function completeTripCycle(session, tripId) {
 
 /** Travel until the balance can afford the dearest reward we want to test. */
 async function earnAtLeast(session, target) {
+  // A trip already open for boarding is still one you can travel on — and
+  // earlier suites leave their door open, because that is what boarding does.
   const { data: trips } = await driver.supabase
     .from('driver_assignments')
     .select('trip_id')
-    .eq('trip_status', 'SCHEDULED');
+    .in('trip_status', ['SCHEDULED', 'BOARDING']);
 
   for (const t of trips ?? []) {
     if ((await points(session)).points_balance >= target) break;
@@ -244,7 +229,7 @@ if (!trip) {
   console.log('\nCompleting the trip earns points');
   // -------------------------------------------------------------------------
 
-  await driver.supabase.rpc('start_trip', { p_trip_id: tripId });
+  await driver.supabase.rpc('set_trip_boarding', { p_trip_id: tripId });
 
   const boardingPass = await invoke(
     'get-boarding-pass',
@@ -260,6 +245,7 @@ if (!trip) {
         reference: boardingPass.body.data.reference,
         token: boardingPass.body.data.token,
       }),
+      tripId,
     },
     driver.accessToken,
   );
@@ -271,6 +257,7 @@ if (!trip) {
     String(beforeEnd.points_balance),
   );
 
+  await driver.supabase.rpc('start_trip', { p_trip_id: tripId });
   const ended = await driver.supabase.rpc('end_trip', { p_trip_id: tripId });
   check('the driver can end the trip', !ended.error, ended.error?.message);
 

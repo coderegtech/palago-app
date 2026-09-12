@@ -208,7 +208,11 @@ export default function BookingPaymentScreen() {
           <Text variant="body" tone="muted">
             Seats
           </Text>
-          <Text variant="bodyStrong">{b.seatNumbers.join(', ')}</Text>
+          {/* Seats are assigned once this payment is verified, so before then
+              there is nothing honest to put here but the promise. */}
+          <Text variant="bodyStrong">
+            {b.seatNumbers.length > 0 ? b.seatNumbers.join(', ') : 'Assigned after payment'}
+          </Text>
         </View>
         <View className="flex-row justify-between">
           <Text variant="body" tone="muted">

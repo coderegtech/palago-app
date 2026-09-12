@@ -368,8 +368,10 @@ export default function BookingDetailScreen() {
         dismissOnBackdropPress={false}>
         <View className="gap-4 pt-2">
           <Text variant="body" tone="muted">
-            Seats {b.seatNumbers.join(', ')} on {b.tripNumber} will be released and offered to other
-            passengers. This cannot be undone.
+            {b.seatNumbers.length > 0
+              ? `Seats ${b.seatNumbers.join(', ')} on ${b.tripNumber} will be released and offered to other passengers.`
+              : `Your held seats on ${b.tripNumber} will be released and offered to other passengers.`}{' '}
+            This cannot be undone.
           </Text>
           <Button label="Yes, cancel booking" variant="danger" onPress={onCancel} />
           <Button

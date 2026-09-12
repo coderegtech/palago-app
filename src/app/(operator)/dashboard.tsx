@@ -2,6 +2,7 @@ import {
   Bus,
   CheckCircle,
   CircleAlert,
+  Banknote,
   Clock,
   IdCard,
   MapPin,
@@ -338,6 +339,7 @@ function SOSMonitoring() {
 }
 
 export default function OperatorDashboardScreen() {
+  const router = useRouter();
   const { profile } = useAuth();
   const today = todayISO();
   const dashboard = useOperatorDashboard(today);
@@ -528,6 +530,25 @@ export default function OperatorDashboardScreen() {
             <SOSMonitoring />
 
             <DiscountQueueTile />
+
+            <Card className="gap-3">
+              <View className="flex-row items-center gap-3">
+                <Banknote size={20} color={Colors.primary} />
+                <View className="flex-1">
+                  <Text variant="bodyStrong">Sell at the counter</Text>
+                  <Text variant="caption" tone="muted">
+                    Book a passenger who has no smartphone, take the fare in cash, and issue a
+                    ticket.
+                  </Text>
+                </View>
+              </View>
+              <Button
+                label="Counter sale"
+                variant="secondary"
+                onPress={() => router.push('/assisted-booking')}
+                accessibilityLabel="Sell a ticket at the counter"
+              />
+            </Card>
           </>
         )}
       </ScrollView>

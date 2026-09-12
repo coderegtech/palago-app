@@ -1,6 +1,11 @@
 import { useBookingStore } from '@/stores/booking-store';
 
-const seat = (n: string) => ({ seatId: `seat-${n}`, seatNumber: n });
+const passenger = (name: string) => ({
+  name,
+  phone: '',
+  email: '',
+  type: 'ADULT' as const,
+});
 
 describe('booking draft', () => {
   beforeEach(() => {
@@ -9,8 +14,9 @@ describe('booking draft', () => {
 
   it('starts empty', () => {
     const state = useBookingStore.getState();
-    expect(state.selectedSeats).toEqual([]);
     expect(state.tripId).toBeNull();
+    expect(state.passengers).toEqual([]);
+    expect(state.passengerCount).toBe(1);
   });
 
   it('takes the passenger count from the search', () => {
@@ -23,67 +29,38 @@ describe('booking draft', () => {
     expect(useBookingStore.getState().passengerCount).toBe(3);
   });
 
-  it('selects and deselects seats', () => {
+  it('carries the passenger count onto the chosen trip', () => {
     const store = useBookingStore.getState();
-    store.selectTrip('trip-1', 2);
+    store.selectTrip('trip-1', 3);
 
-    store.toggleSeat(seat('1A'));
-    expect(useBookingStore.getState().selectedSeats).toHaveLength(1);
-
-    store.toggleSeat(seat('1A'));
-    expect(useBookingStore.getState().selectedSeats).toHaveLength(0);
+    const state = useBookingStore.getState();
+    expect(state.tripId).toBe('trip-1');
+    expect(state.passengerCount).toBe(3);
   });
 
-  it('will not select more seats than there are passengers', () => {
+  it('drops half-filled passenger details when the trip changes', () => {
+    // Those details were entered for a different departure; carrying them over
+    // would quietly book strangers onto the new one.
     const store = useBookingStore.getState();
     store.selectTrip('trip-1', 2);
-
-    store.toggleSeat(seat('1A'));
-    store.toggleSeat(seat('1B'));
-    store.toggleSeat(seat('1C'));
-
-    const { selectedSeats } = useBookingStore.getState();
-    expect(selectedSeats).toHaveLength(2);
-    expect(selectedSeats.map((s) => s.seatNumber)).toEqual(['1A', '1B']);
-  });
-
-  it('frees a slot when a seat is deselected', () => {
-    const store = useBookingStore.getState();
-    store.selectTrip('trip-1', 1);
-
-    store.toggleSeat(seat('1A'));
-    store.toggleSeat(seat('1A'));
-    store.toggleSeat(seat('2B'));
-
-    expect(useBookingStore.getState().selectedSeats.map((s) => s.seatNumber)).toEqual(['2B']);
-  });
-
-  it('discards seat choices when the trip changes', () => {
-    // Seat ids belong to one departure, so carrying them across trips would
-    // send stale ids to reserve_seats.
-    const store = useBookingStore.getState();
-    store.selectTrip('trip-1', 2);
-    store.toggleSeat(seat('1A'));
-    expect(useBookingStore.getState().selectedSeats).toHaveLength(1);
+    store.setPassengers([passenger('Juan')]);
+    expect(useBookingStore.getState().passengers).toHaveLength(1);
 
     useBookingStore.getState().selectTrip('trip-2', 2);
-    expect(useBookingStore.getState().selectedSeats).toEqual([]);
+    expect(useBookingStore.getState().passengers).toEqual([]);
     expect(useBookingStore.getState().tripId).toBe('trip-2');
   });
 
   it('clears everything on reset, so a new funnel starts clean', () => {
     const store = useBookingStore.getState();
     store.selectTrip('trip-1', 2);
-    store.toggleSeat(seat('1A'));
-    store.setPassengers([
-      { seatId: 'seat-1A', seatNumber: '1A', name: 'Juan', phone: '', email: '', type: 'ADULT' },
-    ]);
+    store.setPassengers([passenger('Juan')]);
 
     useBookingStore.getState().reset();
 
     const state = useBookingStore.getState();
     expect(state.tripId).toBeNull();
-    expect(state.selectedSeats).toEqual([]);
     expect(state.passengers).toEqual([]);
+    expect(state.passengerCount).toBe(1);
   });
 });

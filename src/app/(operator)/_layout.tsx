@@ -71,6 +71,7 @@ export default function OperatorLayout() {
         <Tabs.Screen name="buses" options={{ href: null }} />
         <Tabs.Screen name="manifest" options={{ href: null }} />
         <Tabs.Screen name="discount-review" options={{ href: null }} />
+        <Tabs.Screen name="assisted-booking" options={{ href: null }} />
       </Tabs>
     </AuthGate>
   );

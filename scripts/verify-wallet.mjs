@@ -21,23 +21,9 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import fs from 'node:fs';
-import path from 'node:path';
+import { loadVerifyEnv } from './_verify-env.mjs';
 
-const root = path.resolve(import.meta.dirname, '..');
-const env = Object.fromEntries(
-  fs
-    .readFileSync(path.join(root, '.env'), 'utf8')
-    .split('\n')
-    .filter((l) => l.includes('=') && !l.trim().startsWith('#'))
-    .map((l) => {
-      const i = l.indexOf('=');
-      return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
-    }),
-);
-
-const URL_ = env.EXPO_PUBLIC_SUPABASE_URL;
-const KEY = env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const { url: URL_, key: KEY } = loadVerifyEnv();
 const PASSWORD = 'PalawanGo2026';
 
 const client = () => createClient(URL_, KEY, { auth: { persistSession: false } });
@@ -279,19 +265,9 @@ const trip = (
 if (!trip) {
   check('a bookable trip exists (seed data)', false, 'none found');
 } else {
-  const seats = (
-    await passenger.supabase
-      .from('trip_seats')
-      .select('seat_id')
-      .eq('trip_id', trip.id)
-      .eq('status', 'AVAILABLE')
-      .limit(2)
-  ).data;
-
-  const booking = await passenger.supabase.rpc('reserve_seats', {
+  const booking = await passenger.supabase.rpc('create_booking', {
     p_trip_id: trip.id,
-    p_passengers: seats.map((s, i) => ({
-      seatId: s.seat_id,
+    p_passengers: [0, 1].map((i) => ({
       name: i === 0 ? 'Wallet Test' : 'Wallet Two',
       phone: '09171234567',
       email: null,
@@ -451,19 +427,10 @@ if (!trip) {
   console.log('\nInsufficient funds');
   // -------------------------------------------------------------------------
 
-  const poorSeat = (
-    await other.supabase
-      .from('trip_seats')
-      .select('seat_id')
-      .eq('trip_id', trip.id)
-      .eq('status', 'AVAILABLE')
-      .limit(1)
-  ).data?.[0];
-
-  const poorBooking = await other.supabase.rpc('reserve_seats', {
+  const poorBooking = await other.supabase.rpc('create_booking', {
     p_trip_id: trip.id,
     p_passengers: [
-      { seatId: poorSeat.seat_id, name: 'Broke Test', phone: '09171234567', email: null, type: 'ADULT' },
+      { name: 'Broke Test', phone: '09171234567', email: null, type: 'ADULT' },
     ],
   });
 

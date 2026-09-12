@@ -113,7 +113,9 @@ function UpcomingBooking({ booking }: { booking: BookingSummary }) {
             {formatDateShort(booking.departureDate)} · {formatTime(booking.departureTime)}
           </Text>
           <Text variant="caption" tone="muted">
-            Seat{booking.seatNumbers.length === 1 ? '' : 's'} {booking.seatNumbers.join(', ')}
+            {booking.seatNumbers.length > 0
+              ? `Seat${booking.seatNumbers.length === 1 ? '' : 's'} ${booking.seatNumbers.join(', ')}`
+              : 'Seat assigned once paid'}
           </Text>
         </View>
       </Card>
@@ -157,6 +159,41 @@ export default function HomeScreen() {
           <Text variant="body" tone="muted">
             Where are you travelling today?
           </Text>
+        </View>
+
+{/* Both figures are read from the database — neither is invented. */}
+        <View className="flex-row gap-3">
+          <Pressable
+            className="flex-1"
+            accessibilityRole="button"
+            accessibilityLabel="Open your wallet"
+            onPress={() => router.push('/wallet')}>
+            <Card className="gap-1">
+              <Text variant="caption" tone="muted">
+                Wallet
+              </Text>
+              <Text variant="subtitle">{formatMoney(wallet.data?.balance ?? 0)}</Text>
+              <Text variant="caption" tone="muted" className="text-[10px]">
+                Available balance
+              </Text>
+            </Card>
+          </Pressable>
+
+          <Pressable
+            className="flex-1"
+            accessibilityRole="button"
+            accessibilityLabel="Open your rewards"
+            onPress={() => router.push('/rewards')}>
+            <Card className="gap-1">
+              <Text variant="caption" tone="muted">
+                Points
+              </Text>
+              <Text variant="subtitle">{loyalty.data?.pointsBalance ?? 0}</Text>
+              <Text variant="caption" tone="muted" className="text-[10px]">
+                Earned on completed trips
+              </Text>
+            </Card>
+          </Pressable>
         </View>
 
         <Pressable
@@ -290,40 +327,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Both figures are read from the database — neither is invented. */}
-        <View className="flex-row gap-3">
-          <Pressable
-            className="flex-1"
-            accessibilityRole="button"
-            accessibilityLabel="Open your wallet"
-            onPress={() => router.push('/wallet')}>
-            <Card className="gap-1">
-              <Text variant="caption" tone="muted">
-                Wallet
-              </Text>
-              <Text variant="subtitle">{formatMoney(wallet.data?.balance ?? 0)}</Text>
-              <Text variant="caption" tone="muted" className="text-[10px]">
-                Available balance
-              </Text>
-            </Card>
-          </Pressable>
-
-          <Pressable
-            className="flex-1"
-            accessibilityRole="button"
-            accessibilityLabel="Open your rewards"
-            onPress={() => router.push('/rewards')}>
-            <Card className="gap-1">
-              <Text variant="caption" tone="muted">
-                Points
-              </Text>
-              <Text variant="subtitle">{loyalty.data?.pointsBalance ?? 0}</Text>
-              <Text variant="caption" tone="muted" className="text-[10px]">
-                Earned on completed trips
-              </Text>
-            </Card>
-          </Pressable>
-        </View>
+        
 
         {upcoming.length > 0 ? (
           <Pressable

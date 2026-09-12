@@ -78,7 +78,8 @@ export interface CreatedPayment {
 
 export interface PublicPaymentPassenger {
   name: string;
-  seat: string;
+  /** Null until the payment is verified — seats are assigned then. */
+  seat: string | null;
   type: PassengerType;
 }
 

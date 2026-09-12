@@ -8,18 +8,33 @@ The mock provider is *not* a shortcut around the backend. It runs the complete r
 records, server-side validation, Edge Functions, receipts, Realtime — and only the act of moving
 money is simulated. That is what makes swapping in a real provider a contained change.
 
-## Status: not yet implemented
+## Status: built
 
-Phase 5 builds this. This document records the design the rest of the system is being built
-against; nothing described below exists in code yet beyond the route shell at
-`src/app/payment/[reference].tsx`.
+The passenger flow, the public payment page, receipts, the mock wallet and — since the counter
+revision — cash taken at a counter are all in code and covered by `pnpm db:verify:payment`,
+`:wallet` and `:counter`.
+
+## Payment comes before the seat
+
+A passenger never chooses a seat, and no seat number is attached to anyone until the fare is
+verified:
+
+```
+choose trip → passenger details → summary → pay → verified → SEAT ASSIGNED → QR ticket
+```
+
+`create_booking` holds *capacity* for the booking — as many seats as it needs, anonymously, for ten
+minutes — and `assign_seats_for_booking` hands out the numbers from inside the payment functions.
+The hold is deliberate: taking money with nothing reserved lets two passengers pay for the last
+seat, and one of them then gets a refund instead of a trip. What the change removes is a named
+person sitting in a numbered seat before they have paid for it.
 
 ## End-to-end flow
 
 ```
-User selects trip → seats → passengers
+User selects trip → passengers
         ↓
-create-booking            booking = PAYMENT_PENDING, seats = HELD (10 min)
+create-booking            booking = PAYMENT_PENDING, capacity HELD (10 min), no seat numbers yet
         ↓
 create-test-payment       payment = PENDING, reference PAY-2026-000001, payment URL
         ↓
@@ -129,3 +144,34 @@ moves and none can.
 What did change is that a receipt or a balance from this build is now visually indistinguishable
 from a real one. If a real provider is ever added, the switch has to be a deliberate decision — the
 on-screen labels are no longer there to make the mock obvious to whoever is looking at it.
+
+## Cash at the counter
+
+For the passenger with no smartphone, no account, or no card. A clerk sells the seat in the operator
+app (`(operator)/assisted-booking.tsx`), and the fare is recorded by `record_counter_payment`:
+
+| Method | Provider | Moves money? |
+|---|---|---|
+| `CASH` | `CASH` | **Yes — notes across a counter** |
+| `TEST_GCASH`, `TEST_MAYA`, `TEST_CARD`, `TEST_BANK` | `MOCK` | No, simulated exactly as before |
+| `TEST_WALLET` | — | Refused here; a wallet is the account holder's to spend |
+
+Cash is the first payment in this build that corresponds to real money, so the row that records it
+is the only record the money exists. It therefore carries `received_by` — the member of staff who
+took it — enforced by a CHECK constraint rather than by the code that writes it: a CASH payment
+without a named receiver cannot be stored, and a non-cash payment cannot claim one.
+
+Two properties worth knowing:
+
+- **Only an operator manager or an admin can record it.** No passenger can mark any booking paid, in
+  cash or otherwise; `verify-counter` asserts this for a passenger, for a rival operator, and for an
+  anonymous caller.
+- **It is idempotent.** A clerk double-tapping "cash received" gets the first receipt back rather
+  than taking the fare twice, and exactly one payment and one receipt exist afterwards.
+
+The counter booking itself has no account holder: `bookings.user_id` is null and `created_by` names
+the clerk. That is why the ticket is fetched by the clerk rather than the passenger, and why a
+walk-in earns no loyalty points — there is no account to hold them.
+
+Printing to a ticket printer, and boarding by booking reference instead of a scan, are **not built
+yet**. The ticket screen says so rather than implying a printer exists.
