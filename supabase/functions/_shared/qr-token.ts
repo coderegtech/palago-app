@@ -89,15 +89,20 @@ export async function verifyBoardingToken(
 
   let valid: boolean;
   try {
+    const signatureBytes = fromBase64Url(signature);
+    // One spelling per signature. `atob` ignores the unused low bits of the
+    // final character, so without this a 32-byte HMAC ending in "A" is equally
+    // accepted ending in "B", "C" or "D". Not a forgery — the bytes are the
+    // same — but a verifier should accept exactly one encoding of what it
+    // issued. (It is also what made the suite's "tampered signature" check fail
+    // one run in sixteen.)
+    if (toBase64Url(signatureBytes) !== signature) {
+      return { ok: false, reason: 'INVALID_QR' };
+    }
     const key = await hmacKey(secret);
     // crypto.subtle.verify compares in constant time, so this does not leak
     // how much of a forged signature was correct.
-    valid = await crypto.subtle.verify(
-      'HMAC',
-      key,
-      fromBase64Url(signature),
-      encoder.encode(body),
-    );
+    valid = await crypto.subtle.verify('HMAC', key, signatureBytes, encoder.encode(body));
   } catch {
     return { ok: false, reason: 'INVALID_QR' };
   }

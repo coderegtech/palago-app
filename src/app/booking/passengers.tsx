@@ -6,7 +6,6 @@ import { KeyboardAvoidingView, Platform, View } from 'react-native';
 
 import { FormInput } from '@/components/common/form-input';
 import { Alert } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Header } from '@/components/ui/header';
@@ -16,7 +15,7 @@ import { Text } from '@/components/ui/text';
 import { ErrorCode } from '@/constants/errors';
 import { PassengerType } from '@/constants/enums';
 import { useAuth } from '@/hooks/use-auth';
-import { useReserveSeats } from '@/hooks/use-trips';
+import { useCreateBooking } from '@/hooks/use-trips';
 import { AppError } from '@/lib/errors';
 import { passengersFormSchema, type PassengersFormInput } from '@/schemas/booking';
 import { useBookingStore } from '@/stores/booking-store';
@@ -36,11 +35,10 @@ export default function PassengersScreen() {
   const showToast = useUIStore((state) => state.showToast);
 
   const tripId = useBookingStore((state) => state.tripId) ?? paramTripId ?? null;
-  const selectedSeats = useBookingStore((state) => state.selectedSeats);
-  const clearSeats = useBookingStore((state) => state.clearSeats);
+  const passengerCount = useBookingStore((state) => state.passengerCount);
   const reset = useBookingStore((state) => state.reset);
 
-  const reserve = useReserveSeats();
+  const reserve = useCreateBooking();
 
   const { control, handleSubmit } = useForm<PassengersFormInput>({
     resolver: zodResolver(passengersFormSchema),
@@ -49,13 +47,11 @@ export default function PassengersScreen() {
 
   const { fields, replace } = useFieldArray({ control, name: 'passengers' });
 
-  // One form row per selected seat. Rebuilt when the selection changes so a
-  // seat swapped on the previous screen cannot leave a stale row behind.
+  // One form row per traveller. Seats are not chosen here — or anywhere by the
+  // passenger: they are assigned once the payment is verified.
   useEffect(() => {
     replace(
-      selectedSeats.map((seat, index) => ({
-        seatId: seat.seatId,
-        seatNumber: seat.seatNumber,
+      Array.from({ length: passengerCount }, (_unused, index) => ({
         // The person booking is usually the first passenger.
         name: index === 0 ? (profile?.fullName ?? '') : '',
         phone: index === 0 ? (profile?.phone ?? '') : '',
@@ -63,7 +59,7 @@ export default function PassengersScreen() {
         type: PassengerType.ADULT,
       })),
     );
-  }, [selectedSeats, profile?.fullName, profile?.phone, profile?.email, replace]);
+  }, [passengerCount, profile?.fullName, profile?.phone, profile?.email, replace]);
 
   const onSubmit = handleSubmit(({ passengers }) => {
     // Guarded rather than silently ignored: the button is disabled below when
@@ -90,48 +86,40 @@ export default function PassengersScreen() {
           });
         },
         onError: (error) => {
-          // Losing the race is ordinary, not exceptional: send the user back to
-          // pick again rather than leaving them on a form that cannot succeed.
+          // Losing the race is ordinary, not exceptional: the bus filled up
+          // while this form was open, so send them back to the trip list
+          // rather than leaving them on a form that cannot succeed.
           if (error instanceof AppError && error.code === ErrorCode.SEAT_UNAVAILABLE) {
-            clearSeats();
             showToast({
               tone: 'warning',
-              title: 'Those seats were just taken',
-              message: 'Someone booked them while you were filling this in. Please pick again.',
+              title: 'That bus just filled up',
+              message: 'The last seats went while you were filling this in. Please pick another trip.',
             });
-            router.replace({ pathname: '/booking/seats', params: { tripId } });
+            router.replace('/booking/search');
           }
         },
       },
     );
   });
 
-  // Either the draft was lost (a reload, a deep link) or no seats were chosen.
-  // Both leave this form unable to succeed, so say so and offer a way out
-  // rather than showing inputs whose submit would do nothing.
-  if (selectedSeats.length === 0 || !tripId) {
+  // The draft was lost — a reload, or a deep link straight to this screen.
+  // Without a trip the form cannot succeed, so say so rather than showing
+  // inputs whose submit would do nothing.
+  if (!tripId) {
     return (
       <Screen>
         <Header title="Passenger details" showBack fallbackHref="/booking/search" />
         <Alert
           tone="info"
-          title={tripId ? 'No seats selected' : 'Start your booking again'}
-          message={
-            tripId
-              ? 'Go back and choose your seats first.'
-              : 'This page was opened without a trip. Search for a trip to begin.'
-          }
+          title="Start your booking again"
+          message="This page was opened without a trip. Search for a trip to begin."
           className="mt-4"
         />
         <Button
-          label={tripId ? 'Choose seats' : 'Search trips'}
+          label="Search trips"
           variant="outline"
           className="mt-4"
-          onPress={() =>
-            tripId
-              ? router.replace({ pathname: '/booking/seats', params: { tripId } })
-              : router.replace('/booking/search')
-          }
+          onPress={() => router.replace('/booking/search')}
         />
       </Screen>
     );
@@ -148,7 +136,7 @@ export default function PassengersScreen() {
     <Screen scroll>
       <Header
         title="Passenger details"
-        subtitle={`${selectedSeats.length} ${selectedSeats.length === 1 ? 'seat' : 'seats'}`}
+        subtitle={`${passengerCount} ${passengerCount === 1 ? 'passenger' : 'passengers'}`}
         showBack
       />
 
@@ -165,11 +153,7 @@ export default function PassengersScreen() {
         <View className="gap-4">
           {fields.map((field, index) => (
             <Card key={field.id} className="gap-3">
-              <View className="flex-row items-center justify-between">
-                <Text variant="subtitle">Passenger {index + 1}</Text>
-                {/* The seat comes from the draft, not the form — it is not editable here. */}
-                <Badge label={`Seat ${selectedSeats[index]?.seatNumber ?? ''}`} tone="primary" />
-              </View>
+              <Text variant="subtitle">Passenger {index + 1}</Text>
 
               <FormInput
                 control={control}
@@ -228,7 +212,7 @@ export default function PassengersScreen() {
         </Text>
 
         <Button
-          label="Reserve seats"
+          label="Continue to payment"
           className="mt-6"
           loading={reserve.isPending}
           onPress={onSubmit}

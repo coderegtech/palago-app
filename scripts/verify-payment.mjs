@@ -16,23 +16,9 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { execSync } from 'node:child_process';
-import fs from 'node:fs';
-import path from 'node:path';
+import { loadVerifyEnv } from './_verify-env.mjs';
 
-const root = path.resolve(import.meta.dirname, '..');
-const env = Object.fromEntries(
-  fs
-    .readFileSync(path.join(root, '.env'), 'utf8')
-    .split('\n')
-    .filter((l) => l.includes('=') && !l.trim().startsWith('#'))
-    .map((l) => {
-      const i = l.indexOf('=');
-      return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
-    }),
-);
-
-const URL_ = env.EXPO_PUBLIC_SUPABASE_URL;
-const KEY = env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const { url: URL_, key: KEY } = loadVerifyEnv();
 const PASSWORD = 'PalawanGo2026';
 
 const client = () => createClient(URL_, KEY, { auth: { persistSession: false } });
@@ -85,26 +71,16 @@ async function freshBooking(supabase, seatCount = 2) {
     .limit(1);
   const trip = trips[0];
 
-  const { data: seats } = await supabase
-    .from('trip_seats')
-    .select('seat_id')
-    .eq('trip_id', trip.id)
-    .eq('status', 'AVAILABLE')
-    .limit(seatCount);
-
-  if (!seats || seats.length < seatCount) throw new Error('not enough free seats');
-
-  const { data, error } = await supabase.rpc('reserve_seats', {
+  const { data, error } = await supabase.rpc('create_booking', {
     p_trip_id: trip.id,
-    p_passengers: seats.map((s, i) => ({
-      seatId: s.seat_id,
+    p_passengers: Array.from({ length: seatCount }, (_unused, i) => ({
       name: i === 0 ? 'Juan Dela Cruz' : `Passenger ${i + 1}`,
       phone: '09171234567',
       email: null,
       type: 'ADULT',
     })),
   });
-  if (error) throw new Error(`reserve_seats failed: ${error.message}`);
+  if (error) throw new Error(`create_booking failed: ${error.message}`);
   return { booking: data, trip };
 }
 
@@ -237,7 +213,14 @@ console.log('\nScenario 4: the public payment page reads its payment');
   const p = got.body?.data;
   check('it includes the booking reference', Boolean(p?.bookingReference));
   check('it includes the fare breakdown', p?.totalAmount === payment.amount);
-  check('it includes both passengers with seats', p?.passengers?.length === 2);
+  check('it includes both passengers', p?.passengers?.length === 2);
+  // This page is shown before paying, and seats are assigned after. An inner
+  // join on the seat once made the page list nobody at all.
+  check(
+    'with no seat numbers yet — those come when this payment is verified',
+    (p?.passengers ?? []).every((x) => x.seat === null),
+    JSON.stringify((p?.passengers ?? []).map((x) => x.seat)),
+  );
   check('no receipt exists before confirmation', p?.receipt === null);
 
   // The token is the credential; echoing it back would be a needless leak.
@@ -304,6 +287,22 @@ console.log('\nScenario 5-6: confirmation, and confirming five times');
     .select('status, confirmed_at, held_until')
     .eq('booking_id', booking.bookingId);
   check('the seats moved HELD to BOOKED', seats?.every((s) => s.status === 'BOOKED'), JSON.stringify(seats?.map((s) => s.status)));
+
+  // The other half of payment-before-seat: now, and only now, each passenger
+  // has a seat number.
+  const { data: seated } = await admin.supabase
+    .from('booking_passengers')
+    .select('passenger_name, seat_id')
+    .eq('booking_id', booking.bookingId);
+  check(
+    'and every passenger is now assigned one',
+    (seated?.length ?? 0) === 2 && seated.every((x) => x.seat_id !== null),
+    JSON.stringify(seated?.map((x) => x.seat_id)),
+  );
+  check(
+    'each to a different seat',
+    new Set((seated ?? []).map((x) => x.seat_id)).size === (seated?.length ?? 0),
+  );
   check('the seats carry a confirmation time', seats?.every((s) => s.confirmed_at !== null));
   check('the seats no longer carry a hold deadline', seats?.every((s) => s.held_until === null));
 

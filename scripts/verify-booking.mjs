@@ -1,35 +1,30 @@
 /**
- * Seat reservation guarantees, verified against the local stack.
+ * Booking guarantees, verified against the local stack.
  *
  *   pnpm db:verify:booking
  *
- * The point of `reserve_seats` is that it is atomic under contention. That
+ * The point of `create_booking` is that it is atomic under contention. That
  * cannot be shown with a unit test or by reading the SQL — it needs real
- * concurrent transactions racing for the same row. Each supabase-js `rpc` call
+ * concurrent transactions racing for the same rows. Each supabase-js `rpc` call
  * is a separate HTTP request and therefore a separate transaction, so firing a
  * batch of them with `Promise.all` reproduces the actual race.
  *
- * Run after any change to reserve_seats, cancel_booking or expire_seat_holds.
+ * Two properties are specific to this design:
+ *
+ *   - **No seat is assigned at booking.** A passenger never picks one, and
+ *     which seat each traveller gets is decided when the payment is verified.
+ *     What a booking holds is capacity.
+ *   - **Simultaneous buyers do not collide.** They take different seats rather
+ *     than queueing for the same one; only when the bus is down to its last
+ *     seat does exactly one of them win.
+ *
+ * Run after any change to create_booking, cancel_booking or expire_seat_holds.
  */
 
 import { createClient } from '@supabase/supabase-js';
-import fs from 'node:fs';
-import path from 'node:path';
+import { loadVerifyEnv } from './_verify-env.mjs';
 
-const root = path.resolve(import.meta.dirname, '..');
-const env = Object.fromEntries(
-  fs
-    .readFileSync(path.join(root, '.env'), 'utf8')
-    .split('\n')
-    .filter((l) => l.includes('=') && !l.trim().startsWith('#'))
-    .map((l) => {
-      const i = l.indexOf('=');
-      return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
-    }),
-);
-
-const URL = env.EXPO_PUBLIC_SUPABASE_URL;
-const KEY = env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const { url: URL, key: KEY } = loadVerifyEnv();
 const PASSWORD = 'PalawanGo2026';
 
 const client = () => createClient(URL, KEY, { auth: { persistSession: false } });
@@ -59,6 +54,7 @@ const passenger = await signIn('passenger@palago.test');
 // is *allowed* to read and cancel other people's bookings.
 const other = await signIn('passenger2@palago.test');
 const admin = await signIn('admin@palago.test');
+const cherry = await signIn('operator@palago.test');
 
 /** Cancel every still-unpaid booking, releasing its seats. */
 async function releaseAllHolds() {
@@ -83,60 +79,60 @@ const { data: trips } = await passenger
   .limit(1);
 const trip = trips[0];
 
-/**
- * Claim `n` seats that are free *right now*.
- *
- * Every block asks for its own seats rather than indexing into a list captured
- * at startup — earlier blocks consume seats, so fixed indices go stale and the
- * later assertions then fail for reasons that have nothing to do with the code
- * under test.
- */
-async function takeFreeSeats(n) {
-  const { data } = await passenger
-    .from('trip_seats')
-    .select('seat_id')
-    .eq('trip_id', trip.id)
-    .eq('status', 'AVAILABLE')
-    .order('seat_id')
-    .limit(n);
-  if (!data || data.length < n) throw new Error(`needed ${n} free seats, found ${data?.length ?? 0}`);
-  return data.map((s) => s.seat_id);
-}
-
 console.log(`\nUsing trip ${trip.trip_number} (fare ${trip.fare} centavos)`);
 
-const passengerFor = (seatId, name = 'Juan Dela Cruz') => ({
-  seatId,
+const passengerFor = (name = 'Juan Dela Cruz') => ({
   name,
   phone: '09171234567',
   email: 'juan@palago.test',
   type: 'ADULT',
 });
 
-const seatRow = async (seatId) =>
+const book = (who, count, name = 'Juan Dela Cruz') =>
+  who.rpc('create_booking', {
+    p_trip_id: trip.id,
+    p_passengers: Array.from({ length: count }, (_unused, i) =>
+      passengerFor(count === 1 ? name : `${name} ${i + 1}`),
+    ),
+  });
+
+/** Free seats on the trip right now. */
+async function freeSeats() {
+  const { count } = await admin
+    .from('trip_seats')
+    .select('seat_id', { count: 'exact', head: true })
+    .eq('trip_id', trip.id)
+    .eq('status', 'AVAILABLE');
+  return count ?? 0;
+}
+
+/** The seat rows a booking holds. */
+const seatsOf = async (bookingId) =>
   (
     await admin
       .from('trip_seats')
-      .select('status, held_until, booking_id')
-      .eq('trip_id', trip.id)
-      .eq('seat_id', seatId)
-      .single()
-  ).data;
+      .select('seat_id, status, held_until, booking_id')
+      .eq('booking_id', bookingId)
+  ).data ?? [];
+
+/** What each passenger on a booking was given, if anything. */
+const passengersOf = async (bookingId) =>
+  (
+    await admin
+      .from('booking_passengers')
+      .select('id, passenger_name, seat_id')
+      .eq('booking_id', bookingId)
+  ).data ?? [];
 
 // ---------------------------------------------------------------------------
 console.log('\nHappy path');
 // ---------------------------------------------------------------------------
-let heldSeat;
+let firstBookingId;
 {
-  const [seat] = await takeFreeSeats(1);
-  heldSeat = seat;
+  const { data, error } = await book(passenger, 1);
+  firstBookingId = data?.bookingId;
 
-  const { data, error } = await passenger.rpc('reserve_seats', {
-    p_trip_id: trip.id,
-    p_passengers: [passengerFor(seat)],
-  });
-
-  check('a single seat can be reserved', !error && Boolean(data?.bookingId), error?.message);
+  check('a booking can be made without choosing a seat', !error && Boolean(data?.bookingId), error?.message);
   check('booking opens in PAYMENT_PENDING', data?.status === 'PAYMENT_PENDING', data?.status);
   check(
     'reference looks like PG-YYYY-NNNNNN',
@@ -149,81 +145,142 @@ let heldSeat;
     `${data?.totalAmount} vs fare ${trip.fare}`,
   );
 
-  const row = await seatRow(seat);
-  check('the seat is now HELD', row?.status === 'HELD', row?.status);
-  check('the hold carries an expiry', Boolean(row?.held_until), 'held_until is null');
+  const held = await seatsOf(data.bookingId);
+  check('one seat is held for it', held.length === 1, `${held.length} seats`);
+  check('the seat is HELD, not BOOKED', held[0]?.status === 'HELD', held[0]?.status);
+  check('the hold carries an expiry', Boolean(held[0]?.held_until), 'held_until is null');
 
-  const minutes = (new Date(row.held_until) - Date.now()) / 60000;
+  const minutes = (new Date(held[0].held_until) - Date.now()) / 60000;
   check('the hold lasts about 10 minutes', minutes > 9 && minutes <= 10.5, `${minutes.toFixed(1)}m`);
 
-  const pair = await takeFreeSeats(2);
-  const two = await passenger.rpc('reserve_seats', {
-    p_trip_id: trip.id,
-    p_passengers: [passengerFor(pair[0], 'Ana Cruz'), passengerFor(pair[1], 'Ben Cruz')],
-  });
+  // The point of the change: capacity is held, but nobody has a seat number
+  // until they have paid for it.
+  const people = await passengersOf(data.bookingId);
+  check('the passenger has no seat yet', people.every((x) => x.seat_id === null),
+    JSON.stringify(people.map((x) => x.seat_id)));
+  check('and the reply says so', data?.seatsAssigned === false, String(data?.seatsAssigned));
+
+  const two = await book(passenger, 2, 'Cruz');
   check(
     'two seats price at fare x 2',
     two.data?.totalAmount === trip.fare * 2,
     `${two.data?.totalAmount} vs ${trip.fare * 2}`,
   );
   check('both passengers are recorded', two.data?.seatCount === 2, String(two.data?.seatCount));
+  check('and two seats are held', (await seatsOf(two.data.bookingId)).length === 2);
 }
 
 // ---------------------------------------------------------------------------
 console.log('\nConcurrency — the guarantee this function exists for');
 // ---------------------------------------------------------------------------
 {
-  const [contested] = await takeFreeSeats(1);
+  // Eight people buying at the same instant on a bus with room: all eight
+  // should succeed, on eight *different* seats. Before, they would have been
+  // fighting over whichever seats they had each picked.
   const CALLERS = 8;
-
-  const attempts = Array.from({ length: CALLERS }, (_, i) =>
-    (i % 2 === 0 ? passenger : other).rpc('reserve_seats', {
+  const attempts = Array.from({ length: CALLERS }, (_unused, i) =>
+    (i % 2 === 0 ? passenger : other).rpc('create_booking', {
       p_trip_id: trip.id,
-      p_passengers: [passengerFor(contested, `Racer ${i}`)],
+      p_passengers: [passengerFor(`Racer ${i}`)],
     }),
   );
 
   const results = await Promise.all(attempts);
   const won = results.filter((r) => !r.error);
-  const lost = results.filter((r) => r.error);
-
   check(
-    `exactly one of ${CALLERS} simultaneous callers wins the seat`,
-    won.length === 1,
-    `${won.length} succeeded`,
-  );
-  check(
-    'every loser is told SEAT_UNAVAILABLE',
-    lost.length === CALLERS - 1 && lost.every((r) => r.error.message === 'SEAT_UNAVAILABLE'),
-    [...new Set(lost.map((r) => r.error.message))].join(', '),
+    `all ${CALLERS} simultaneous buyers are served`,
+    won.length === CALLERS,
+    `${won.length} succeeded: ${[...new Set(results.filter((r) => r.error).map((r) => r.error.message))].join(', ')}`,
   );
 
-  const row = await seatRow(contested);
-  check('the contested seat is HELD exactly once', row?.status === 'HELD', row?.status);
+  const seatIds = [];
+  for (const r of won) {
+    for (const row of await seatsOf(r.data.bookingId)) seatIds.push(row.seat_id);
+  }
   check(
-    'the winning booking owns the seat',
-    row?.booking_id === won[0]?.data?.bookingId,
-    'seat points at a different booking',
+    'and no two of them are given the same seat',
+    new Set(seatIds).size === seatIds.length && seatIds.length === CALLERS,
+    `${seatIds.length} seats, ${new Set(seatIds).size} distinct`,
   );
+
+  for (const r of won) await passenger.rpc('cancel_booking', { p_booking_id: r.data.bookingId });
 }
 
 // ---------------------------------------------------------------------------
-console.log('\nDeadlock resistance — overlapping seat sets, opposite order');
+console.log('\nThe last seat');
 // ---------------------------------------------------------------------------
 {
-  // Both callers want the same two seats, requested in opposite order. Without
-  // a deterministic lock order inside reserve_seats this is the textbook
-  // deadlock: each grabs one row and waits on the other.
-  const [a, b] = await takeFreeSeats(2);
+  // Fill the bus down to one free seat, then have several people try to buy at
+  // once. This is the case where someone must lose, and losing must be a clean
+  // SEAT_UNAVAILABLE rather than an oversold bus.
+  const fillers = [];
+  let free = await freeSeats();
+  while (free > 1) {
+    const take = Math.min(10, free - 1);
+    const filled = await book(passenger, take, 'Filler');
+    if (filled.error) break;
+    fillers.push(filled.data.bookingId);
+    free = await freeSeats();
+  }
+  check('the bus can be filled to its last seat', free === 1, `${free} free`);
+
+  const CALLERS = 5;
+  const scramble = await Promise.all(
+    Array.from({ length: CALLERS }, (_unused, i) =>
+      (i % 2 === 0 ? passenger : other).rpc('create_booking', {
+        p_trip_id: trip.id,
+        p_passengers: [passengerFor(`Last ${i}`)],
+      }),
+    ),
+  );
+  const got = scramble.filter((r) => !r.error);
+  const missed = scramble.filter((r) => r.error);
+
+  check('exactly one buyer gets the last seat', got.length === 1, `${got.length} succeeded`);
+  check(
+    'the rest are told SEAT_UNAVAILABLE, not sold a seat that is gone',
+    missed.length === CALLERS - 1 && missed.every((r) => r.error.message === 'SEAT_UNAVAILABLE'),
+    [...new Set(missed.map((r) => r.error.message))].join(', '),
+  );
+  check('the bus is now full', (await freeSeats()) === 0, `${await freeSeats()} free`);
+
+  const full = await book(passenger, 1, 'Too Late');
+  check('and a later booking is refused too', full.error?.message === 'SEAT_UNAVAILABLE',
+    full.error?.message);
+
+  for (const id of [...fillers, ...got.map((r) => r.data.bookingId)]) {
+    await passenger.rpc('cancel_booking', { p_booking_id: id });
+  }
+  check('cancelling the fillers gives the bus back', (await freeSeats()) > 1, `${await freeSeats()} free`);
+}
+
+// ---------------------------------------------------------------------------
+console.log('\nDeadlock resistance — the counter picking overlapping seats');
+// ---------------------------------------------------------------------------
+{
+  // Passengers no longer name seats, but the operator counter still does. Two
+  // clerks asking for the same two seats in opposite order is the textbook
+  // deadlock: each grabs one row and waits on the other. The ordered locking
+  // inside create_booking is what stops it.
+  const { data: free } = await admin
+    .from('trip_seats')
+    .select('seat_id')
+    .eq('trip_id', trip.id)
+    .eq('status', 'AVAILABLE')
+    .order('seat_id')
+    .limit(2);
+  const [a, b] = free.map((r) => r.seat_id);
 
   const outcomes = await Promise.all([
-    passenger.rpc('reserve_seats', {
+    cherry.rpc('create_booking', {
       p_trip_id: trip.id,
-      p_passengers: [passengerFor(a, 'Forward A'), passengerFor(b, 'Forward B')],
+      p_passengers: [passengerFor('Forward A'), passengerFor('Forward B')],
+      p_seat_ids: [a, b],
     }),
-    other.rpc('reserve_seats', {
+    cherry.rpc('create_booking', {
       p_trip_id: trip.id,
-      p_passengers: [passengerFor(b, 'Reverse B'), passengerFor(a, 'Reverse A')],
+      p_passengers: [passengerFor('Reverse B'), passengerFor('Reverse A')],
+      p_seat_ids: [b, a],
     }),
   ]);
 
@@ -235,44 +292,64 @@ console.log('\nDeadlock resistance — overlapping seat sets, opposite order');
     !losers.some((r) => /deadlock/i.test(r.error.message)),
     losers.map((r) => r.error.message).join(', '),
   );
-  check('exactly one caller gets the pair', winners.length === 1, `${winners.length} succeeded`);
+  check('exactly one clerk gets the pair', winners.length === 1, `${winners.length} succeeded`);
   check(
     'the loser gets SEAT_UNAVAILABLE, not a database error',
     losers.every((r) => r.error.message === 'SEAT_UNAVAILABLE'),
     losers.map((r) => r.error.message).join(', '),
   );
+
+  // Picking seats is staff-only: a passenger asking for one is refused.
+  const pickedByPassenger = await passenger.rpc('create_booking', {
+    p_trip_id: trip.id,
+    p_passengers: [passengerFor('Seat Picker')],
+    p_seat_ids: [a],
+  });
+  check(
+    'a passenger cannot choose their own seat',
+    pickedByPassenger.error?.message === 'FORBIDDEN',
+    pickedByPassenger.error?.message ?? 'the call succeeded',
+  );
+
+  for (const r of winners) await admin.rpc('cancel_booking', { p_booking_id: r.data.bookingId });
 }
 
 // ---------------------------------------------------------------------------
 console.log('\nRejections');
 // ---------------------------------------------------------------------------
 {
-  const taken = await passenger.rpc('reserve_seats', {
+  const beforeFree = await freeSeats();
+
+  const oneSeat = (
+    await admin.from('trip_seats').select('seat_id').eq('trip_id', trip.id)
+      .eq('status', 'AVAILABLE').limit(1).single()
+  ).data.seat_id;
+
+  const mismatched = await cherry.rpc('create_booking', {
     p_trip_id: trip.id,
-    p_passengers: [passengerFor(heldSeat)],
+    p_passengers: [passengerFor('A'), passengerFor('B')],
+    p_seat_ids: [oneSeat],
   });
   check(
-    'an already-held seat is refused',
-    taken.error?.message === 'SEAT_UNAVAILABLE',
-    taken.error?.message,
+    'one seat for two passengers is refused',
+    mismatched.error?.message === 'VALIDATION_ERROR',
+    mismatched.error?.message ?? 'the call succeeded',
   );
 
-  // These all fail, so the seat stays free and can be reused between them.
-  const [spare] = await takeFreeSeats(1);
-
-  const duped = await passenger.rpc('reserve_seats', {
+  const duplicated = await cherry.rpc('create_booking', {
     p_trip_id: trip.id,
-    p_passengers: [passengerFor(spare, 'A'), passengerFor(spare, 'B')],
+    p_passengers: [passengerFor('A'), passengerFor('B')],
+    p_seat_ids: [oneSeat, oneSeat],
   });
   check(
     'the same seat twice in one booking is refused',
-    duped.error?.message === 'VALIDATION_ERROR',
-    duped.error?.message,
+    duplicated.error?.message === 'VALIDATION_ERROR',
+    duplicated.error?.message ?? 'the call succeeded',
   );
 
-  const nameless = await passenger.rpc('reserve_seats', {
+  const nameless = await passenger.rpc('create_booking', {
     p_trip_id: trip.id,
-    p_passengers: [{ seatId: spare, name: '   ', type: 'ADULT' }],
+    p_passengers: [{ name: '   ', type: 'ADULT' }],
   });
   check(
     'a blank passenger name is refused',
@@ -280,34 +357,41 @@ console.log('\nRejections');
     nameless.error?.message,
   );
 
-  const empty = await passenger.rpc('reserve_seats', { p_trip_id: trip.id, p_passengers: [] });
+  const empty = await passenger.rpc('create_booking', { p_trip_id: trip.id, p_passengers: [] });
   check(
     'an empty passenger list is refused',
     empty.error?.message === 'VALIDATION_ERROR',
     empty.error?.message,
   );
 
-  const foreign = await passenger.rpc('reserve_seats', {
+  const crowd = await book(passenger, 11, 'Crowd');
+  check(
+    'more than ten passengers in one booking is refused',
+    crowd.error?.message === 'VALIDATION_ERROR',
+    crowd.error?.message,
+  );
+
+  const foreign = await cherry.rpc('create_booking', {
     p_trip_id: trip.id,
-    p_passengers: [passengerFor('00000000-0000-0000-0000-000000000000')],
+    p_passengers: [passengerFor('Foreign Seat')],
+    p_seat_ids: ['00000000-0000-0000-0000-000000000000'],
   });
   check(
     'a seat from another bus is refused',
-    foreign.error?.message === 'VALIDATION_ERROR',
+    foreign.error?.message === 'SEAT_UNAVAILABLE' || foreign.error?.message === 'VALIDATION_ERROR',
     foreign.error?.message,
   );
 
-  const unauth = await client().rpc('reserve_seats', {
+  const unauth = await client().rpc('create_booking', {
     p_trip_id: trip.id,
-    p_passengers: [passengerFor(spare)],
+    p_passengers: [passengerFor('Anonymous')],
   });
-  check('an anonymous caller cannot reserve', Boolean(unauth.error), 'the call succeeded');
+  check('an anonymous caller cannot book', Boolean(unauth.error), 'the call succeeded');
 
-  const stillFree = await seatRow(spare);
   check(
-    'a rejected reservation leaves the seat untouched',
-    stillFree?.status === 'AVAILABLE',
-    stillFree?.status,
+    'every rejected booking held nothing',
+    (await freeSeats()) === beforeFree,
+    `${beforeFree} free before, ${await freeSeats()} after`,
   );
 }
 
@@ -315,13 +399,10 @@ console.log('\nRejections');
 console.log('\nCancellation');
 // ---------------------------------------------------------------------------
 {
-  const [seat] = await takeFreeSeats(1);
-  const created = await passenger.rpc('reserve_seats', {
-    p_trip_id: trip.id,
-    p_passengers: [passengerFor(seat)],
-  });
+  const created = await book(passenger, 1);
   if (created.error) throw new Error(`setup failed: ${created.error.message}`);
   const bookingId = created.data.bookingId;
+  const [heldRow] = await seatsOf(bookingId);
 
   const cancelled = await passenger.rpc('cancel_booking', { p_booking_id: bookingId });
   check(
@@ -330,7 +411,10 @@ console.log('\nCancellation');
     cancelled.error?.message,
   );
 
-  const row = await seatRow(seat);
+  const row = (
+    await admin.from('trip_seats').select('status, held_until').eq('seat_id', heldRow.seat_id)
+      .eq('trip_id', trip.id).single()
+  ).data;
   check('cancelling releases the seat', row?.status === 'AVAILABLE', row?.status);
   check('the released seat keeps no stale hold', row?.held_until === null, 'held_until still set');
 
@@ -341,11 +425,7 @@ console.log('\nCancellation');
     again.error?.message,
   );
 
-  const [otherSeat] = await takeFreeSeats(1);
-  const mine = await passenger.rpc('reserve_seats', {
-    p_trip_id: trip.id,
-    p_passengers: [passengerFor(otherSeat)],
-  });
+  const mine = await book(passenger, 1);
   const theirs = await other.rpc('cancel_booking', { p_booking_id: mine.data.bookingId });
   check(
     "another passenger cannot cancel someone else's booking",
@@ -388,11 +468,15 @@ console.log('\nPrivileges');
     'the update was applied',
   );
 
+  const someHeld = (
+    await admin.from('trip_seats').select('seat_id').eq('trip_id', trip.id).eq('status', 'HELD')
+      .limit(1).maybeSingle()
+  ).data;
   const seatWrite = await passenger
     .from('trip_seats')
     .update({ status: 'AVAILABLE' })
     .eq('trip_id', trip.id)
-    .eq('seat_id', heldSeat)
+    .eq('seat_id', someHeld?.seat_id ?? '00000000-0000-0000-0000-000000000000')
     .select();
   check(
     'a client cannot free a seat it does not own',

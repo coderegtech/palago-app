@@ -76,7 +76,11 @@ export function useTripSeats(tripId: UUID | null) {
   });
 }
 
-export function useReserveSeats() {
+/**
+ * Opens a booking and holds its capacity. No seat is chosen here — which seat
+ * each passenger gets is decided when the payment is verified.
+ */
+export function useCreateBooking() {
   const queryClient = useQueryClient();
 
   return useMutation<
@@ -84,7 +88,7 @@ export function useReserveSeats() {
     Error,
     { tripId: UUID; passengers: PassengerDetailInput[] }
   >({
-    mutationFn: ({ tripId, passengers }) => bookingService.reserveSeats(tripId, passengers),
+    mutationFn: ({ tripId, passengers }) => bookingService.createBooking(tripId, passengers),
     onSettled: (_data, _error, variables) => {
       // Whether it succeeded or lost the race, the seat map is now out of date.
       queryClient.invalidateQueries({ queryKey: tripKeys.seats(variables.tripId) });

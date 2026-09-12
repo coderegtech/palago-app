@@ -56,15 +56,41 @@ export interface BoardingPass extends BookingQRPayload {
   expiresAt: string;
 }
 
-/** What the scanner shows the operator. `result` is a code, not prose. */
+/**
+ * Every verdict the server can give a ticket at a door. `result` is a code,
+ * not prose — the scanner owns the wording.
+ */
+export type ScanVerdict =
+  | 'VALID'
+  | 'INVALID_QR'
+  | 'QR_EXPIRED'
+  | 'ALREADY_BOARDED'
+  | 'UNPAID_BOOKING'
+  | 'BOOKING_CANCELLED'
+  | 'BOARDING_NOT_OPEN'
+  | 'BOARDING_CLOSED'
+  | 'WRONG_TRIP'
+  | 'WRONG_ROUTE'
+  | 'WRONG_DATE'
+  | 'WRONG_BUS';
+
+export interface ScanPassenger {
+  id: UUID;
+  name: string;
+  seat: string;
+  type: PassengerType;
+  /** Set once this passenger has boarded; a booking can be partly boarded. */
+  boardedAt: string | null;
+}
+
+/**
+ * What the scanner shows the operator. For a rival operator's ticket only
+ * `result` and `valid` come back. For a ticket on another of this operator's
+ * trips the trip is described (so the passenger can be sent to the right bus)
+ * but `passengers` is empty.
+ */
 export interface ScanResult {
-  result:
-    | 'VALID'
-    | 'INVALID_QR'
-    | 'QR_EXPIRED'
-    | 'ALREADY_BOARDED'
-    | 'UNPAID_BOOKING'
-    | 'WRONG_TRIP';
+  result: ScanVerdict;
   valid: boolean;
   bookingId?: UUID;
   bookingReference?: string;
@@ -79,16 +105,25 @@ export interface ScanResult {
   originName?: string;
   destinationCode?: string;
   destinationName?: string;
+  busNumber?: string;
   paymentStatus?: PaymentStatus | 'NONE';
-  passengers?: { name: string; seat: string; type: PassengerType }[];
+  passengers?: ScanPassenger[];
 }
 
+/**
+ * The outcome of a boarding attempt. A refusal is a `result` with
+ * `boarded: false`, not an exception — the server logs it either way.
+ */
 export interface BoardingResult {
   boarded: boolean;
   alreadyBoarded: boolean;
-  result: string;
-  bookingReference: string;
+  result: ScanVerdict;
+  bookingReference: string | null;
   boardedAt: string | null;
+  /** How many passengers this scan boarded. */
+  boardedPassengers?: number;
+  /** How many on the booking are still to board. */
+  remaining?: number;
 }
 
 export const qrService = {
@@ -116,12 +151,20 @@ export const qrService = {
    * Validates a scanned payload. Ticket problems come back as a `result`, not
    * an exception, because the operator needs to see which problem it is.
    */
-  validateScan(payload: string, expectedTripId?: UUID): Promise<ScanResult> {
-    return callFunction<ScanResult>('validate-qr', { payload, expectedTripId });
+  validateScan(payload: string, tripId: UUID): Promise<ScanResult> {
+    return callFunction<ScanResult>('validate-qr', { payload, tripId });
   },
 
-  confirmBoarding(payload: string): Promise<BoardingResult> {
-    return callFunction<BoardingResult>('confirm-boarding', { payload });
+  /**
+   * Boards passengers at `tripId`. Omit `passengerIds` to board everyone on the
+   * booking who has not boarded yet.
+   */
+  confirmBoarding(
+    payload: string,
+    tripId: UUID,
+    passengerIds?: UUID[],
+  ): Promise<BoardingResult> {
+    return callFunction<BoardingResult>('confirm-boarding', { payload, tripId, passengerIds });
   },
 
   /** Recent scans for a trip, for the operator's own record. */

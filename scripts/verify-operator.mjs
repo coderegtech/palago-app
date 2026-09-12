@@ -15,23 +15,9 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import fs from 'node:fs';
-import path from 'node:path';
+import { loadVerifyEnv } from './_verify-env.mjs';
 
-const root = path.resolve(import.meta.dirname, '..');
-const env = Object.fromEntries(
-  fs
-    .readFileSync(path.join(root, '.env'), 'utf8')
-    .split('\n')
-    .filter((l) => l.includes('=') && !l.trim().startsWith('#'))
-    .map((l) => {
-      const i = l.indexOf('=');
-      return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
-    }),
-);
-
-const URL_ = env.EXPO_PUBLIC_SUPABASE_URL;
-const KEY = env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const { url: URL_, key: KEY } = loadVerifyEnv();
 const PASSWORD = 'PalawanGo2026';
 
 const client = () => createClient(URL_, KEY, { auth: { persistSession: false } });
@@ -211,17 +197,9 @@ console.log('\nDashboard numbers track reality');
     check('a Cherry trip departs today (seed data)', false, 'none found');
   } else {
     const trip = todayTrips[0];
-    const { data: seats } = await passenger.supabase
-      .from('trip_seats')
-      .select('seat_id')
-      .eq('trip_id', trip.id)
-      .eq('status', 'AVAILABLE')
-      .limit(2);
-
-    const booking = await passenger.supabase.rpc('reserve_seats', {
+    const booking = await passenger.supabase.rpc('create_booking', {
       p_trip_id: trip.id,
-      p_passengers: seats.map((s, i) => ({
-        seatId: s.seat_id,
+      p_passengers: [0, 1].map((i) => ({
         name: i === 0 ? 'Manifest Test' : 'Manifest Two',
         phone: '09171234567',
         email: null,
@@ -309,7 +287,9 @@ console.log('\nDashboard numbers track reality');
       reference: pass.body.data.reference,
       token: pass.body.data.token,
     });
-    const boarded = await invoke('confirm-boarding', { payload: qr }, cherry.accessToken);
+    // Boarding happens at a named trip, and only once that trip is boarding.
+    await cherry.supabase.rpc('set_trip_boarding', { p_trip_id: trip.id });
+    const boarded = await invoke('confirm-boarding', { payload: qr, tripId: trip.id }, cherry.accessToken);
     check('the operator can board them', boarded.body?.data?.boarded === true, JSON.stringify(boarded.body));
 
     const afterBoarding = (await cherry.supabase.rpc('operator_dashboard')).data.today;

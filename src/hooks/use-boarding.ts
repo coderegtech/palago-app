@@ -30,21 +30,28 @@ export function useBoardingPass(bookingId: UUID | null, enabled = true) {
   });
 }
 
+/** Checks a scanned ticket against the trip being boarded. Changes nothing. */
 export function useValidateScan() {
-  return useMutation<ScanResult, Error, { payload: string; expectedTripId?: UUID }>({
-    mutationFn: ({ payload, expectedTripId }) => qrService.validateScan(payload, expectedTripId),
+  return useMutation<ScanResult, Error, { payload: string; tripId: UUID }>({
+    mutationFn: ({ payload, tripId }) => qrService.validateScan(payload, tripId),
   });
 }
 
 export function useConfirmBoarding() {
   const queryClient = useQueryClient();
 
-  return useMutation<BoardingResult, Error, string>({
-    mutationFn: (payload) => qrService.confirmBoarding(payload),
+  return useMutation<
+    BoardingResult,
+    Error,
+    { payload: string; tripId: UUID; passengerIds?: UUID[] }
+  >({
+    mutationFn: ({ payload, tripId, passengerIds }) =>
+      qrService.confirmBoarding(payload, tripId, passengerIds),
     onSuccess: () => {
-      // Boarding changes booking status, so any list showing it is now stale.
+      // Boarding moves booking status, the manifest and the dashboard counts.
       queryClient.invalidateQueries({ queryKey: bookingKeys.list });
       queryClient.invalidateQueries({ queryKey: ['qr-scans'] });
+      queryClient.invalidateQueries({ queryKey: ['operator'] });
     },
   });
 }

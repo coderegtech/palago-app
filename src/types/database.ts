@@ -110,6 +110,8 @@ export type Database = {
       }
       booking_passengers: {
         Row: {
+          boarded_at: string | null
+          boarded_by: string | null
           booking_id: string
           created_at: string
           discount_amount: number
@@ -119,10 +121,12 @@ export type Database = {
           passenger_name: string
           passenger_type: Database["public"]["Enums"]["passenger_type"]
           phone: string | null
-          seat_id: string
+          seat_id: string | null
           user_id: string | null
         }
         Insert: {
+          boarded_at?: string | null
+          boarded_by?: string | null
           booking_id: string
           created_at?: string
           discount_amount?: number
@@ -132,10 +136,12 @@ export type Database = {
           passenger_name: string
           passenger_type?: Database["public"]["Enums"]["passenger_type"]
           phone?: string | null
-          seat_id: string
+          seat_id?: string | null
           user_id?: string | null
         }
         Update: {
+          boarded_at?: string | null
+          boarded_by?: string | null
           booking_id?: string
           created_at?: string
           discount_amount?: number
@@ -145,7 +151,7 @@ export type Database = {
           passenger_name?: string
           passenger_type?: Database["public"]["Enums"]["passenger_type"]
           phone?: string | null
-          seat_id?: string
+          seat_id?: string | null
           user_id?: string | null
         }
         Relationships: [
@@ -180,17 +186,20 @@ export type Database = {
           checked_in_at: string | null
           confirmed_at: string | null
           created_at: string
+          created_by: string | null
           currency: string
           discount: number
           expires_at: string | null
           id: string
           loyalty_discount: number
+          source: Database["public"]["Enums"]["booking_source"]
           status: Database["public"]["Enums"]["booking_status"]
           subtotal: number
+          ticket_type: Database["public"]["Enums"]["ticket_type"]
           total_amount: number
           trip_id: string
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           boarded_at?: string | null
@@ -199,17 +208,20 @@ export type Database = {
           checked_in_at?: string | null
           confirmed_at?: string | null
           created_at?: string
+          created_by?: string | null
           currency?: string
           discount?: number
           expires_at?: string | null
           id?: string
           loyalty_discount?: number
+          source?: Database["public"]["Enums"]["booking_source"]
           status?: Database["public"]["Enums"]["booking_status"]
           subtotal: number
+          ticket_type?: Database["public"]["Enums"]["ticket_type"]
           total_amount: number
           trip_id: string
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           boarded_at?: string | null
@@ -218,17 +230,20 @@ export type Database = {
           checked_in_at?: string | null
           confirmed_at?: string | null
           created_at?: string
+          created_by?: string | null
           currency?: string
           discount?: number
           expires_at?: string | null
           id?: string
           loyalty_discount?: number
+          source?: Database["public"]["Enums"]["booking_source"]
           status?: Database["public"]["Enums"]["booking_status"]
           subtotal?: number
+          ticket_type?: Database["public"]["Enums"]["ticket_type"]
           total_amount?: number
           trip_id?: string
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -772,10 +787,12 @@ export type Database = {
           currency: string
           expires_at: string | null
           id: string
+          method: Database["public"]["Enums"]["payment_method"] | null
           paid_at: string | null
           payment_url: string | null
           provider: Database["public"]["Enums"]["payment_provider"]
           receipt_number: string | null
+          received_by: string | null
           reference: string
           refunded_at: string | null
           status: Database["public"]["Enums"]["payment_status"]
@@ -790,10 +807,12 @@ export type Database = {
           currency?: string
           expires_at?: string | null
           id?: string
+          method?: Database["public"]["Enums"]["payment_method"] | null
           paid_at?: string | null
           payment_url?: string | null
           provider?: Database["public"]["Enums"]["payment_provider"]
           receipt_number?: string | null
+          received_by?: string | null
           reference?: string
           refunded_at?: string | null
           status?: Database["public"]["Enums"]["payment_status"]
@@ -808,10 +827,12 @@ export type Database = {
           currency?: string
           expires_at?: string | null
           id?: string
+          method?: Database["public"]["Enums"]["payment_method"] | null
           paid_at?: string | null
           payment_url?: string | null
           provider?: Database["public"]["Enums"]["payment_provider"]
           receipt_number?: string | null
+          received_by?: string | null
           reference?: string
           refunded_at?: string | null
           status?: Database["public"]["Enums"]["payment_status"]
@@ -888,29 +909,38 @@ export type Database = {
       qr_scans: {
         Row: {
           booking_id: string | null
+          bus_id: string | null
           id: string
           operator_user_id: string
           result: string
+          scan_method: Database["public"]["Enums"]["scan_method"]
           scan_type: Database["public"]["Enums"]["scan_type"]
           scanned_at: string
+          ticket_trip_id: string | null
           trip_id: string | null
         }
         Insert: {
           booking_id?: string | null
+          bus_id?: string | null
           id?: string
           operator_user_id: string
           result: string
+          scan_method?: Database["public"]["Enums"]["scan_method"]
           scan_type: Database["public"]["Enums"]["scan_type"]
           scanned_at?: string
+          ticket_trip_id?: string | null
           trip_id?: string | null
         }
         Update: {
           booking_id?: string | null
+          bus_id?: string | null
           id?: string
           operator_user_id?: string
           result?: string
+          scan_method?: Database["public"]["Enums"]["scan_method"]
           scan_type?: Database["public"]["Enums"]["scan_type"]
           scanned_at?: string
+          ticket_trip_id?: string | null
           trip_id?: string | null
         }
         Relationships: [
@@ -927,6 +957,62 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "operator_manifest"
             referencedColumns: ["booking_id"]
+          },
+          {
+            foreignKeyName: "qr_scans_bus_id_fkey"
+            columns: ["bus_id"]
+            isOneToOne: false
+            referencedRelation: "buses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "qr_scans_bus_id_fkey"
+            columns: ["bus_id"]
+            isOneToOne: false
+            referencedRelation: "operator_fleet"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "qr_scans_bus_id_fkey"
+            columns: ["bus_id"]
+            isOneToOne: false
+            referencedRelation: "operator_trip_overview"
+            referencedColumns: ["bus_id"]
+          },
+          {
+            foreignKeyName: "qr_scans_ticket_trip_id_fkey"
+            columns: ["ticket_trip_id"]
+            isOneToOne: false
+            referencedRelation: "driver_assignments"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "qr_scans_ticket_trip_id_fkey"
+            columns: ["ticket_trip_id"]
+            isOneToOne: false
+            referencedRelation: "operator_trip_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "qr_scans_ticket_trip_id_fkey"
+            columns: ["ticket_trip_id"]
+            isOneToOne: false
+            referencedRelation: "trip_live_position"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "qr_scans_ticket_trip_id_fkey"
+            columns: ["ticket_trip_id"]
+            isOneToOne: false
+            referencedRelation: "trip_search"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "qr_scans_ticket_trip_id_fkey"
+            columns: ["ticket_trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "qr_scans_trip_id_fkey"
@@ -2016,10 +2102,22 @@ export type Database = {
         Returns: Database["public"]["Enums"]["discount_kind"]
       }
       admin_dashboard: { Args: { p_date?: string }; Returns: Json }
+      assign_seats_for_booking: {
+        Args: { p_booking_id: string }
+        Returns: number
+      }
       award_loyalty_for_booking: {
         Args: { p_booking_id: string }
         Returns: number
       }
+      boarding_verdict: {
+        Args: {
+          p_booking: Database["public"]["Tables"]["bookings"]["Row"]
+          p_door: Database["public"]["Tables"]["trips"]["Row"]
+        }
+        Returns: string
+      }
+      can_manage_operator: { Args: { p_operator_id: string }; Returns: boolean }
       can_manage_sos: { Args: { p_trip_id: string }; Returns: boolean }
       can_manage_trip_status: { Args: { p_trip_id: string }; Returns: boolean }
       can_publish_location: { Args: { p_trip_id: string }; Returns: boolean }
@@ -2031,9 +2129,28 @@ export type Database = {
         Returns: Json
       }
       cancel_sos: { Args: { p_sos_id: string }; Returns: Json }
-      confirm_boarding: { Args: { p_booking_id: string }; Returns: Json }
+      confirm_boarding: {
+        Args: {
+          p_booking_id: string
+          p_method?: Database["public"]["Enums"]["scan_method"]
+          p_passenger_ids?: string[]
+          p_trip_id: string
+        }
+        Returns: Json
+      }
       confirm_test_payment: {
         Args: { p_ip_address?: string; p_reference: string; p_token: string }
+        Returns: Json
+      }
+      create_booking: {
+        Args: {
+          p_passengers: Json
+          p_seat_ids?: string[]
+          p_source?: Database["public"]["Enums"]["booking_source"]
+          p_ticket_type?: Database["public"]["Enums"]["ticket_type"]
+          p_trip_id: string
+          p_walk_in?: boolean
+        }
         Returns: Json
       }
       create_bus: {
@@ -2101,6 +2218,13 @@ export type Database = {
       next_receipt_number: { Args: never; Returns: string }
       operator_dashboard: { Args: { p_date?: string }; Returns: Json }
       pay_booking_with_wallet: { Args: { p_booking_id: string }; Returns: Json }
+      record_counter_payment: {
+        Args: {
+          p_booking_id: string
+          p_method: Database["public"]["Enums"]["payment_method"]
+        }
+        Returns: Json
+      }
       redeem_reward: {
         Args: { p_booking_id: string; p_reward_id: string }
         Returns: Json
@@ -2109,10 +2233,6 @@ export type Database = {
       release_booking_redemption: {
         Args: { p_booking_id: string }
         Returns: number
-      }
-      reserve_seats: {
-        Args: { p_passengers: Json; p_trip_id: string }
-        Returns: Json
       }
       resolve_sos: {
         Args: { p_note?: string; p_sos_id: string }
@@ -2162,8 +2282,9 @@ export type Database = {
       validate_booking_qr: {
         Args: {
           p_booking_id: string
-          p_expected_trip_id?: string
+          p_method?: Database["public"]["Enums"]["scan_method"]
           p_reference: string
+          p_trip_id: string
         }
         Returns: Json
       }
@@ -2204,6 +2325,7 @@ export type Database = {
     }
     Enums: {
       assignment_status: "ASSIGNED" | "ACTIVE" | "COMPLETED" | "CANCELLED"
+      booking_source: "MOBILE_APP" | "WEB" | "OPERATOR" | "TERMINAL"
       booking_status:
         | "PENDING"
         | "PAYMENT_PENDING"
@@ -2237,7 +2359,14 @@ export type Database = {
         | "SYSTEM"
       operator_status: "ACTIVE" | "INACTIVE"
       passenger_type: "ADULT" | "CHILD" | "SENIOR" | "STUDENT" | "PWD"
-      payment_provider: "MOCK" | "STRIPE" | "GCASH" | "MAYA"
+      payment_method:
+        | "CASH"
+        | "TEST_GCASH"
+        | "TEST_MAYA"
+        | "TEST_CARD"
+        | "TEST_BANK"
+        | "TEST_WALLET"
+      payment_provider: "MOCK" | "STRIPE" | "GCASH" | "MAYA" | "CASH"
       payment_status:
         | "PENDING"
         | "PROCESSING"
@@ -2252,6 +2381,7 @@ export type Database = {
         | "FAILED"
         | "REFUNDED"
         | "CANCELLED"
+      scan_method: "QR" | "REFERENCE" | "MANUAL"
       scan_type: "VALIDATION" | "BOARDING"
       seat_type: "REGULAR" | "PRIORITY" | "DRIVER" | "RESERVED"
       sos_status:
@@ -2261,6 +2391,7 @@ export type Database = {
         | "RESOLVED"
         | "CANCELLED"
       staff_status: "ACTIVE" | "INACTIVE" | "SUSPENDED"
+      ticket_type: "DIGITAL" | "PRINTED"
       trip_seat_status: "AVAILABLE" | "HELD" | "BOOKED" | "BLOCKED"
       trip_status:
         | "SCHEDULED"
@@ -2408,6 +2539,7 @@ export const Constants = {
   public: {
     Enums: {
       assignment_status: ["ASSIGNED", "ACTIVE", "COMPLETED", "CANCELLED"],
+      booking_source: ["MOBILE_APP", "WEB", "OPERATOR", "TERMINAL"],
       booking_status: [
         "PENDING",
         "PAYMENT_PENDING",
@@ -2444,7 +2576,15 @@ export const Constants = {
       ],
       operator_status: ["ACTIVE", "INACTIVE"],
       passenger_type: ["ADULT", "CHILD", "SENIOR", "STUDENT", "PWD"],
-      payment_provider: ["MOCK", "STRIPE", "GCASH", "MAYA"],
+      payment_method: [
+        "CASH",
+        "TEST_GCASH",
+        "TEST_MAYA",
+        "TEST_CARD",
+        "TEST_BANK",
+        "TEST_WALLET",
+      ],
+      payment_provider: ["MOCK", "STRIPE", "GCASH", "MAYA", "CASH"],
       payment_status: [
         "PENDING",
         "PROCESSING",
@@ -2461,6 +2601,7 @@ export const Constants = {
         "REFUNDED",
         "CANCELLED",
       ],
+      scan_method: ["QR", "REFERENCE", "MANUAL"],
       scan_type: ["VALIDATION", "BOARDING"],
       seat_type: ["REGULAR", "PRIORITY", "DRIVER", "RESERVED"],
       sos_status: [
@@ -2471,6 +2612,7 @@ export const Constants = {
         "CANCELLED",
       ],
       staff_status: ["ACTIVE", "INACTIVE", "SUSPENDED"],
+      ticket_type: ["DIGITAL", "PRINTED"],
       trip_seat_status: ["AVAILABLE", "HELD", "BOOKED", "BLOCKED"],
       trip_status: [
         "SCHEDULED",

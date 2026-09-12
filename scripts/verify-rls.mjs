@@ -13,23 +13,9 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import fs from 'node:fs';
-import path from 'node:path';
+import { loadVerifyEnv } from './_verify-env.mjs';
 
-const root = path.resolve(import.meta.dirname, '..');
-const env = Object.fromEntries(
-  fs
-    .readFileSync(path.join(root, '.env'), 'utf8')
-    .split('\n')
-    .filter((l) => l.includes('=') && !l.trim().startsWith('#'))
-    .map((l) => {
-      const i = l.indexOf('=');
-      return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
-    }),
-);
-
-const URL = env.EXPO_PUBLIC_SUPABASE_URL;
-const KEY = env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const { url: URL, key: KEY } = loadVerifyEnv();
 const PASSWORD = 'PalawanGo2026';
 
 const client = () => createClient(URL, KEY, { auth: { persistSession: false } });
@@ -223,6 +209,100 @@ console.log('\nAdmin');
 
   const drivers = (await admin.from('drivers').select('id')).data ?? [];
   check('admin reads every driver', drivers.length === 2, `saw ${drivers.length}`);
+}
+
+// ---------------------------------------------------------------------------
+// Crew are staff, not managers
+//
+// Drivers and assistants carry their operator's id, and every write policy
+// used to ask only "is this row your operator's?". Each check below re-reads
+// the row as admin afterwards: an empty result without an error is exactly
+// what a silently-applied-elsewhere write looks like, so the effect is what
+// gets asserted.
+// ---------------------------------------------------------------------------
+
+console.log('\nCrew — must not manage the operator');
+{
+  const assistant = await signIn('assistant@palago.test');
+  const cherryTrip = (
+    await admin.from('trips').select('id, fare, status, operator_id')
+      // Not by trip number: seeded numbers embed the date they were generated
+      // for, so a hardcoded one is right for exactly one day.
+      .eq('status', 'SCHEDULED')
+      .order('departure_date')
+      .order('departure_time')
+      .limit(1)
+      .single()
+  ).data;
+  const readTrip = async () =>
+    (await admin.from('trips').select('fare, status').eq('id', cherryTrip.id).single()).data;
+
+  const assignment = (
+    await admin.from('trip_assignments').select('id, status')
+      .eq('trip_id', cherryTrip.id).neq('status', 'CANCELLED').single()
+  ).data;
+  const readAssignment = async () =>
+    (await admin.from('trip_assignments').select('status').eq('id', assignment.id).single()).data;
+
+  // Each attempt that gets through is undone as admin before the next one, so a
+  // regression reports every failing role instead of the first one poisoning
+  // the rest.
+  for (const [who, db] of [['driver', driver], ['assistant', assistant]]) {
+    await db.from('trips').update({ fare: 1 }).eq('id', cherryTrip.id);
+    const fare = (await readTrip()).fare;
+    check(`${who} cannot change a fare`, fare === cherryTrip.fare, `fare is now ${fare}`);
+    if (fare !== cherryTrip.fare) {
+      await admin.from('trips').update({ fare: cherryTrip.fare }).eq('id', cherryTrip.id);
+    }
+
+    await db.from('trip_assignments').update({ status: 'CANCELLED' }).eq('id', assignment.id);
+    const status = (await readAssignment()).status;
+    check(`${who} cannot change a crew assignment`, status === assignment.status,
+      `assignment is now ${status}`);
+    if (status !== assignment.status) {
+      await admin.from('trip_assignments').update({ status: assignment.status }).eq('id', assignment.id);
+    }
+  }
+
+  const bus = (await admin.from('buses').select('id, name').eq('operator_id', cherryTrip.operator_id).limit(1).single()).data;
+  await driver.from('buses').update({ name: 'Renamed by driver' }).eq('id', bus.id);
+  check('driver cannot rename a bus',
+    (await admin.from('buses').select('name').eq('id', bus.id).single()).data.name === bus.name);
+
+  const op = (await admin.from('operators').select('id, name').eq('id', cherryTrip.operator_id).single()).data;
+  await driver.from('operators').update({ name: 'Renamed by driver' }).eq('id', op.id);
+  check('driver cannot edit the operator record',
+    (await admin.from('operators').select('name').eq('id', op.id).single()).data.name === op.name);
+
+  // A complete row, so the only thing that can refuse it is the policy. (An
+  // earlier version omitted license_number and "passed" on a NOT NULL error.)
+  await driver.from('drivers').insert({
+    operator_id: cherryTrip.operator_id,
+    name: 'Hired by driver',
+    license_number: 'D00-00-000000',
+  });
+  const hired = (await admin.from('drivers').select('id').eq('name', 'Hired by driver')).data ?? [];
+  check('driver cannot add a driver', hired.length === 0, `${hired.length} row(s) created`);
+  if (hired.length) await admin.from('drivers').delete().eq('name', 'Hired by driver');
+
+  // Positive controls: an operator still manages its own fleet and crew.
+  const repriced = await cherry.from('trips').update({ fare: cherryTrip.fare + 100 }).eq('id', cherryTrip.id).select('fare');
+  check('operator can still change its own fare', repriced.data?.[0]?.fare === cherryTrip.fare + 100,
+    repriced.error?.message);
+  await cherry.from('trips').update({ fare: cherryTrip.fare }).eq('id', cherryTrip.id);
+
+  const crewDriver = (await admin.from('drivers').select('id, status').eq('operator_id', cherryTrip.operator_id).limit(1).single()).data;
+  const suspended = await cherry.from('drivers').update({ status: 'SUSPENDED' }).eq('id', crewDriver.id).select('status');
+  check('operator can still suspend its own driver', suspended.data?.[0]?.status === 'SUSPENDED',
+    suspended.error?.message);
+  await cherry.from('drivers').update({ status: crewDriver.status }).eq('id', crewDriver.id);
+
+  // Status moves only through set_trip_boarding / start_trip / end_trip.
+  for (const [who, db] of [['operator', cherry], ['admin', admin]]) {
+    await db.from('trips').update({ status: 'COMPLETED' }).eq('id', cherryTrip.id);
+    check(`${who} cannot set a trip status directly`, (await readTrip()).status === cherryTrip.status,
+      `status is now ${(await readTrip()).status}`);
+  }
 }
 
 console.log(`\n${passed} passed, ${failures.length} failed`);

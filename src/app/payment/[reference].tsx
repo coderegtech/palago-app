@@ -215,10 +215,14 @@ export default function PaymentPage() {
           <Text variant="caption" tone="muted" className="font-semibold uppercase">
             Passengers
           </Text>
-          {p.passengers.map((passenger) => (
-            <View key={passenger.seat} className="flex-row items-center justify-between">
+          {p.passengers.map((passenger, index) => (
+            // Keyed by position: before payment there is no seat to key on.
+            <View key={index} className="flex-row items-center justify-between">
               <Text variant="body">{passenger.name}</Text>
-              <Badge label={`Seat ${passenger.seat}`} tone="neutral" />
+              <Badge
+                label={passenger.seat ? `Seat ${passenger.seat}` : 'Seat after payment'}
+                tone="neutral"
+              />
             </View>
           ))}
         </View>
@@ -291,7 +295,9 @@ export default function PaymentPage() {
             departureDate={p.departureDate}
             departureTime={p.departureTime}
             passengerNames={p.passengers.map((x) => x.name)}
-            seatNumbers={p.passengers.map((x) => x.seat)}
+            // The receipt is shown after payment, so seats exist by then; the
+            // filter is what keeps a half-assigned booking from printing "null".
+            seatNumbers={p.passengers.map((x) => x.seat).filter((seat): seat is string => Boolean(seat))}
             subtotal={p.subtotal}
             discount={p.discount}
             loyaltyDiscount={p.loyaltyDiscount}

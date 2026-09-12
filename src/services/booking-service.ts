@@ -28,13 +28,16 @@ export interface ReservationResult {
   totalAmount: Centavos;
   currency: string;
   seatCount: number;
+  /** Always false here: seats are assigned once the payment is verified. */
+  seatsAssigned: boolean;
   expiresAt: string;
 }
 
 export interface BookingPassengerView {
   id: UUID;
   name: string;
-  seatNumber: string;
+  /** Null until the payment is verified — seats are assigned then. */
+  seatNumber: string | null;
   type: PassengerType;
   phone: string | null;
   email: string | null;
@@ -94,7 +97,7 @@ const DETAIL_COLUMNS =
   '               origin:terminals!routes_origin_terminal_id_fkey(name, code), ' +
   '               destination:terminals!routes_destination_terminal_id_fkey(name, code))), ' +
   'booking_passengers(id, passenger_name, passenger_type, phone, email, ' +
-  '  bus_seats!inner(seat_number))';
+  '  bus_seats(seat_number))';
 
 const BOOKING_COLUMNS =
   'id, booking_reference, status, total_amount, subtotal, discount, loyalty_discount, ' +
@@ -103,7 +106,7 @@ const BOOKING_COLUMNS =
   '  operators!inner(name), ' +
   '  routes!inner(origin:terminals!routes_origin_terminal_id_fkey(name, code), ' +
   '               destination:terminals!routes_destination_terminal_id_fkey(name, code))), ' +
-  'booking_passengers(id, passenger_name, passenger_type, bus_seats!inner(seat_number))';
+  'booking_passengers(id, passenger_name, passenger_type, bus_seats(seat_number))';
 
 type BookingRow = {
   id: string;
@@ -133,7 +136,8 @@ type BookingRow = {
     id: string;
     passenger_name: string;
     passenger_type: PassengerType;
-    bus_seats: { seat_number: string };
+    /** Null until the payment is verified: seats are assigned then. */
+    bus_seats: { seat_number: string } | null;
   }[];
 };
 
@@ -178,27 +182,33 @@ function toSummary(row: BookingRow): BookingSummary {
     destinationCode: row.trips.routes.destination.code,
     destinationName: row.trips.routes.destination.name,
     passengerCount: row.booking_passengers.length,
+    // Empty until the booking is paid for — see `create_booking`.
     seatNumbers: row.booking_passengers
-      .map((p) => p.bus_seats.seat_number)
+      .map((p) => p.bus_seats?.seat_number)
+      .filter((seat): seat is string => Boolean(seat))
       .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
   };
 }
 
 export const bookingService = {
   /**
-   * Hold seats and open a booking, atomically.
+   * Open a booking and hold the capacity for it, atomically.
    *
-   * The user id is not sent: `reserve_seats` takes the owner from `auth.uid()`,
+   * No seat is named: the passenger does not choose one, and which seat each
+   * passenger gets is decided when the payment is verified. What is held here
+   * is *how many* seats, for ten minutes, so two people cannot pay for the same
+   * last seat.
+   *
+   * The user id is not sent: `create_booking` takes the owner from `auth.uid()`,
    * so a caller cannot create a booking in someone else's name.
    *
-   * Throws `SEAT_UNAVAILABLE` when another passenger took a seat first — which
-   * is normal, not exceptional, and the seat map should be refetched.
+   * Throws `SEAT_UNAVAILABLE` when the bus filled up first — which is normal,
+   * not exceptional, and the trip list should be refetched.
    */
-  async reserveSeats(tripId: UUID, passengers: PassengerDetailInput[]): Promise<ReservationResult> {
-    const { data, error } = await supabase.rpc('reserve_seats', {
+  async createBooking(tripId: UUID, passengers: PassengerDetailInput[]): Promise<ReservationResult> {
+    const { data, error } = await supabase.rpc('create_booking', {
       p_trip_id: tripId,
       p_passengers: passengers.map((p) => ({
-        seatId: p.seatId,
         name: p.name,
         phone: p.phone || null,
         email: p.email || null,
@@ -265,13 +275,14 @@ export const bookingService = {
         .map((p) => ({
           id: p.id,
           name: p.passenger_name,
-          seatNumber: p.bus_seats.seat_number,
+          seatNumber: p.bus_seats?.seat_number ?? null,
           type: p.passenger_type,
           phone: p.phone,
           email: p.email,
         }))
+        // Unseated passengers (not yet paid) keep their entry order.
         .sort((a, b) =>
-          a.seatNumber.localeCompare(b.seatNumber, undefined, { numeric: true }),
+          (a.seatNumber ?? '').localeCompare(b.seatNumber ?? '', undefined, { numeric: true }),
         ),
     };
   },

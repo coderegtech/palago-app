@@ -23,8 +23,11 @@ import { requireSigningSecret, verifyBoardingToken } from '../_shared/qr-token.t
 interface RequestBody {
   /** The raw QR contents, exactly as scanned. */
   payload?: string;
-  /** The trip being boarded, so a valid ticket for another trip is caught. */
-  expectedTripId?: string;
+  /**
+   * The trip being boarded — required. A ticket is only ever valid for its own
+   * trip, so a scan with no trip cannot be judged at all.
+   */
+  tripId?: string;
 }
 
 Deno.serve(async (request) => {
@@ -42,6 +45,7 @@ Deno.serve(async (request) => {
   }
 
   if (!body.payload) return fail('VALIDATION_ERROR', 'payload is required.');
+  if (!body.tripId) return fail('VALIDATION_ERROR', 'tripId — the trip being boarded — is required.');
 
   let secret: string;
   try {
@@ -84,7 +88,8 @@ Deno.serve(async (request) => {
   const { data, error } = await supabase.rpc('validate_booking_qr', {
     p_booking_id: verified.payload.bid,
     p_reference: verified.payload.ref,
-    p_expected_trip_id: body.expectedTripId ?? null,
+    p_trip_id: body.tripId,
+    p_method: 'QR',
   });
 
   if (error) return failFromRpc(error);

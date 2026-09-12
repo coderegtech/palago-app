@@ -65,8 +65,10 @@ function BookingRow({ booking }: { booking: BookingSummary }) {
             </Text>
             <Text variant="caption" tone="muted">
               {booking.passengerCount}{' '}
-              {booking.passengerCount === 1 ? 'passenger' : 'passengers'} · Seat
-              {booking.seatNumbers.length === 1 ? '' : 's'} {booking.seatNumbers.join(', ')}
+              {booking.passengerCount === 1 ? 'passenger' : 'passengers'}
+              {booking.seatNumbers.length > 0
+                ? ` · Seat${booking.seatNumbers.length === 1 ? '' : 's'} ${booking.seatNumbers.join(', ')}`
+                : ' · seat assigned once paid'}
             </Text>
           </View>
           <Text variant="bodyStrong" tone="primary">

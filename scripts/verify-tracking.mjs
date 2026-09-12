@@ -20,23 +20,9 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import fs from 'node:fs';
-import path from 'node:path';
+import { loadVerifyEnv } from './_verify-env.mjs';
 
-const root = path.resolve(import.meta.dirname, '..');
-const env = Object.fromEntries(
-  fs
-    .readFileSync(path.join(root, '.env'), 'utf8')
-    .split('\n')
-    .filter((l) => l.includes('=') && !l.trim().startsWith('#'))
-    .map((l) => {
-      const i = l.indexOf('=');
-      return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
-    }),
-);
-
-const URL_ = env.EXPO_PUBLIC_SUPABASE_URL;
-const KEY = env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const { url: URL_, key: KEY } = loadVerifyEnv();
 const PASSWORD = 'PalawanGo2026';
 
 const client = () => createClient(URL_, KEY, { auth: { persistSession: false } });
@@ -106,24 +92,43 @@ check(
 const paxBoard = (await passenger.supabase.from('driver_assignments').select('trip_id')).data ?? [];
 check('a passenger sees no crew board', paxBoard.length === 0, `saw ${paxBoard.length}`);
 
-// Pick a trip that has not run yet, so the lifecycle checks start from scratch.
-const trip = (
-  await driver.supabase
-    .from('driver_assignments')
-    .select('trip_id, trip_number, trip_status')
-    .eq('trip_status', 'SCHEDULED')
-    .limit(1)
-).data?.[0];
+// A trip that has not run yet, so the lifecycle checks start from scratch — and
+// one this passenger has no live booking on, because the first thing the suite
+// asserts is that they *cannot* track it. Earlier suites pay for seats on the
+// seeded trips, and a paid booking is exactly what buys tracking.
+const candidates =
+  (
+    await driver.supabase
+      .from('driver_assignments')
+      .select('trip_id, trip_number, trip_status')
+      .eq('trip_status', 'SCHEDULED')
+  ).data ?? [];
+
+// Neither passenger, not just the one doing the booking: the suite also asserts
+// that the *other* passenger stays a stranger to this trip throughout, and the
+// seed gives passenger2 an upcoming booking of their own.
+const liveTripsOf = async (session) =>
+  ((await session.supabase.from('bookings').select('trip_id, status')).data ?? [])
+    .filter((b) => !['CANCELLED', 'REFUNDED'].includes(b.status))
+    .map((b) => b.trip_id);
+
+const spokenFor = new Set([...(await liveTripsOf(passenger)), ...(await liveTripsOf(other))]);
+
+const trip = candidates.find((c) => !spokenFor.has(c.trip_id));
 
 if (!trip) {
-  check('a SCHEDULED Cherry trip exists to drive (seed data)', false, 'none found');
+  check(
+    'a SCHEDULED Cherry trip neither test passenger has booked exists (seed data)',
+    false,
+    `${candidates.length} scheduled, all already booked by one of them`,
+  );
 } else {
   const tripId = trip.trip_id;
 
   // -------------------------------------------------------------------------
   console.log('\nA booking is what buys tracking');
   //
-  // Booked here, while the trip is still SCHEDULED: `reserve_seats` refuses a
+  // Booked here, while the trip is still SCHEDULED: `create_booking` refuses a
   // trip that has already departed, which is correct -- you cannot buy a seat
   // on a bus that has left. The first version of this suite booked after
   // starting the trip and was wrong about the product, not about the code.
@@ -138,19 +143,10 @@ if (!trip) {
     `saw ${beforeBooking.length}`,
   );
 
-  const seat = (
-    await passenger.supabase
-      .from('trip_seats')
-      .select('seat_id')
-      .eq('trip_id', tripId)
-      .eq('status', 'AVAILABLE')
-      .limit(1)
-  ).data?.[0];
-
-  const booking = await passenger.supabase.rpc('reserve_seats', {
+  const booking = await passenger.supabase.rpc('create_booking', {
     p_trip_id: tripId,
     p_passengers: [
-      { seatId: seat.seat_id, name: 'Tracking Test', phone: '09171234567', email: null, type: 'ADULT' },
+      { name: 'Tracking Test', phone: '09171234567', email: null, type: 'ADULT' },
     ],
   });
   check('the passenger can book a seat on it', !booking.error, booking.error?.message);

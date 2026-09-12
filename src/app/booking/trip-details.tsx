@@ -158,11 +158,11 @@ export default function TripDetailsScreen() {
       ) : null}
 
       <Button
-        label="Select seats"
+        label="Enter passenger details"
         className="mt-6"
         disabled={!enoughSeats}
         onPress={() =>
-          router.push({ pathname: '/booking/seats', params: { tripId: t.id } })
+          router.push({ pathname: '/booking/passengers', params: { tripId: t.id } })
         }
       />
     </Screen>

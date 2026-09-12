@@ -20,23 +20,9 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import fs from 'node:fs';
-import path from 'node:path';
+import { loadVerifyEnv } from './_verify-env.mjs';
 
-const root = path.resolve(import.meta.dirname, '..');
-const env = Object.fromEntries(
-  fs
-    .readFileSync(path.join(root, '.env'), 'utf8')
-    .split('\n')
-    .filter((l) => l.includes('=') && !l.trim().startsWith('#'))
-    .map((l) => {
-      const i = l.indexOf('=');
-      return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
-    }),
-);
-
-const URL_ = env.EXPO_PUBLIC_SUPABASE_URL;
-const KEY = env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const { url: URL_, key: KEY } = loadVerifyEnv();
 const PASSWORD = 'PalawanGo2026';
 
 const client = () => createClient(URL_, KEY, { auth: { persistSession: false } });
@@ -105,15 +91,11 @@ if (!trip) {
 const FARE = trip.fare;
 const EXPECTED_OFF = Math.round(FARE * 0.2);
 
-/** Book `types` (one seat each) and return the server's own numbers. */
+/** Book one seat per passenger type and return the server's own numbers. */
 async function book(types) {
-  const seats = await freeSeats(trip.id, types.length);
-  if (seats.length < types.length) return { error: 'not enough free seats' };
-
-  const { data, error } = await passenger.supabase.rpc('reserve_seats', {
+  const { data, error } = await passenger.supabase.rpc('create_booking', {
     p_trip_id: trip.id,
     p_passengers: types.map((type, i) => ({
-      seatId: seats[i],
       name: `Test Passenger ${i + 1}`,
       type,
     })),

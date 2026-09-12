@@ -1,7 +1,9 @@
 /**
  * confirm-boarding
  *
- * Marks a passenger boarded: CONFIRMED (or CHECKED_IN) -> BOARDED, once.
+ * Boards passengers of a booking at the trip being boarded, each at most once.
+ * Refusals (wrong trip, boarding not open, already boarded…) come back as a
+ * `result` with `boarded: false`, not as an error, so they are logged.
  *
  * Re-verifies the signature rather than trusting a bookingId sent by the
  * client. Without that, an operator device could board any booking id it could
@@ -25,7 +27,7 @@ Deno.serve(async (request) => {
   const authorization = request.headers.get('Authorization');
   if (!authorization) return fail('UNAUTHORIZED');
 
-  let body: { payload?: string };
+  let body: { payload?: string; tripId?: string; passengerIds?: string[] };
   try {
     body = await request.json();
   } catch {
@@ -33,6 +35,10 @@ Deno.serve(async (request) => {
   }
 
   if (!body.payload) return fail('VALIDATION_ERROR', 'payload is required.');
+  if (!body.tripId) return fail('VALIDATION_ERROR', 'tripId — the trip being boarded — is required.');
+  if (body.passengerIds !== undefined && !Array.isArray(body.passengerIds)) {
+    return fail('VALIDATION_ERROR', 'passengerIds must be a list.');
+  }
 
   let secret: string;
   try {
@@ -66,6 +72,10 @@ Deno.serve(async (request) => {
 
   const { data, error } = await supabase.rpc('confirm_boarding', {
     p_booking_id: verified.payload.bid,
+    p_trip_id: body.tripId,
+    // Omitted means everyone on the booking not yet boarded.
+    p_passenger_ids: body.passengerIds ?? null,
+    p_method: 'QR',
   });
 
   if (error) return failFromRpc(error);

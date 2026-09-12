@@ -42,9 +42,12 @@ const phone = z
     error: 'Enter a valid Philippine mobile number',
   });
 
+/**
+ * No seat here, on purpose: passengers do not choose one, and which seat each
+ * traveller gets is decided by `create_booking`'s allocation once the payment
+ * is verified.
+ */
 export const passengerDetailSchema = z.object({
-  seatId: z.uuid(),
-  seatNumber: z.string(),
   name: z
     .string()
     .trim()
