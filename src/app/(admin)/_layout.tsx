@@ -1,5 +1,13 @@
 import { Slot, usePathname, useRouter, type Href } from 'expo-router';
-import { Building2, Bus, LayoutDashboard, MapPin, Route } from 'lucide-react-native';
+import {
+  Building2,
+  Bus,
+  CalendarDays,
+  LayoutDashboard,
+  MapPin,
+  Route,
+  Users,
+} from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -23,6 +31,8 @@ const NAV = [
   { href: '/(admin)/terminals', pathname: '/terminals', label: 'Terminals', icon: MapPin },
   { href: '/(admin)/routes', pathname: '/routes', label: 'Routes', icon: Route },
   { href: '/(admin)/fleet', pathname: '/fleet', label: 'Fleet', icon: Bus },
+  { href: '/(admin)/schedules', pathname: '/schedules', label: 'Schedules', icon: CalendarDays },
+  { href: '/(admin)/crew', pathname: '/crew', label: 'Crew', icon: Users },
 ] as const satisfies readonly {
   href: Href;
   pathname: string;

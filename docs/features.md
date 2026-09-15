@@ -205,24 +205,36 @@ form modal over the table, validated against the same bounds the schema
 enforces — coordinate ranges, distinct origin and destination, capacity 1–100 —
 so the form refuses what the database would refuse anyway.
 
+Every table has search, filter chips, a sort control and pagination
+(`TableToolbar` over `DataTable`, with the filtering, sorting and paging in a
+pure, unit-tested `applyTableControls`).
+
 | Screen | What it does |
 |---|---|
 | **Overview** | Platform-wide analytics from `admin_dashboard` — today's trips, passengers, boarded, revenue and on-time rate across every operator, lifetime bookings and revenue, reference-data counts, and the same figures broken out per operator |
-| **Operators** | List and create bus companies |
-| **Terminals** | List and create stations, with latitude/longitude validated against the same bounds the schema enforces |
-| **Routes** | List and create corridors, picking operator, origin and destination |
-| **Fleet** | Every coach across all operators, and `create_bus` to add one |
+| **Operators** | Bus companies: create, view, edit, activate/deactivate — **and the only place an operator login can be created**, reset, or disabled. Each company's accounts and their recent administrative activity are on the detail sheet |
+| **Terminals** | Stations: create, edit, open/close, with latitude/longitude validated against the same bounds the schema enforces |
+| **Routes** | Corridors: create, edit the journey time, retire/reinstate. Where a route *goes* is not editable — re-pointing it would silently change every trip and ticket sold on it |
+| **Fleet** | Every coach across all operators: create with its seat layout, edit, move between companies (only while it is on nobody's schedule), take off the road / put back |
+| **Schedules** | Every departure on the platform, from `trip_search` — create, edit, roster crew, cancel, and tune the turnaround buffer. Shows the ones the operator views hide: a departure whose coach has been withdrawn or whose operator is suspended |
+| **Crew** | Every driver and conductor across all operators, with both statuses, and activate/deactivate on the account. Rosters themselves belong to the operator who employs them |
 
-Two things needed server code; the rest did not. `admin_dashboard` exists
-because the operator views are scoped through `current_operator_id()` and an
-admin has no operator — `operator_dashboard` correctly returns `NO_OPERATOR` for
-them. `create_bus` exists because a coach and its `bus_seats` must arrive
-together: a bus with no seat rows looks sellable but cannot be booked, and the
-2+2 layout is generated from `capacity` server-side so the two cannot disagree.
+Creating an account for somebody else needs the service-role key, so it is an
+Edge Function — `manage-staff` — and every rule it applies is asked of SQL **as
+the signed-in caller**. See [management.md](management.md).
 
-Operators, terminals and routes stay ordinary RLS-guarded inserts. The Phase 3a
-policies already carried `or public.is_admin()`, and wrapping standalone rows in
-a function would enforce nothing the policy does not.
+`admin_dashboard` exists because the operator views are scoped through
+`current_operator_id()` and an admin has no operator — `operator_dashboard`
+correctly returns `NO_OPERATOR` for them. `create_bus` exists because a coach
+and its `bus_seats` must arrive together: a bus with no seat rows looks sellable
+but cannot be booked, and the 2+2 layout is generated from `capacity`
+server-side so the two cannot disagree.
+
+**Nothing here deletes anything.** Operators, terminals, routes, buses and trips
+are referenced by bookings, payments, tickets and boarding scans, so the client
+INSERT/UPDATE/DELETE on all five was withdrawn and every write goes through an
+audited function. Every "Delete" in the console is deactivation, and the
+confirmation dialog says so.
 
 The admin's revenue figure for an operator is asserted equal to what that
 operator sees on its own dashboard, so the two consoles cannot drift apart about
@@ -263,18 +275,23 @@ a rival's data twice during the build.
 | **Dashboard** | Today's passengers, revenue, seats sold, boarded count, trip status counts — all aggregated server-side by `operator_dashboard` (SECURITY DEFINER, explicit role check; returns `scope: 'NO_OPERATOR'` for an admin rather than inventing figures) |
 | **Travel data** | Per-trip overview from `operator_trip_overview` — occupancy, revenue, on-time status against scheduled vs. actual departure |
 | **Manifest** | Passenger list per trip from `operator_manifest` — names, seats, booking status, payment status, boarded state |
-| **Trips** | The operator's scheduled departures |
-| **Fleet** | Buses from `operator_fleet` (a dedicated view — reading `buses` directly showed a Cherry account RoRo's coaches) |
-| **Crew** | Drivers and assistants, add-crew, and a status toggle (active / suspended) — an operator cannot touch another operator's roster |
+| **Schedule** (`trips`) | Every departure this company runs: create, edit, roster a driver and conductor, withdraw from sale, cancel. A clash is refused by the database and names the departure in the way |
+| **Fleet** (`buses`) | Buses from `operator_fleet` (a dedicated view — reading `buses` directly showed a Cherry account RoRo's coaches): create with its seat layout, edit, take off the road / put back |
+| **Drivers** | The driver roster, with **two separate statuses** — account (can sign in) and availability (can be rostered) — plus create with or without a login, edit, reset password, activate/deactivate the account, and set available/unavailable with a reason |
+| **Crew** | The same for conductors and assistants. An operator cannot touch another operator's roster, and cannot create another operator |
 | **Scanner** | Validate and board tickets at the terminal (see Boarding below) |
 | **SOS panel** | Open emergency alerts raised on this operator's trips, with acknowledge / responding / resolve. Live over Realtime *and* polled — a console that missed an alert because a websocket dropped is worse than one that refetches too often. Empty state says so honestly, which it could not before Phase 11 |
 | **Account** | Operator profile, sign out (named `account.tsx`, not `profile.tsx`, to avoid a route collision with the passenger screen) |
 
-Verified by `pnpm db:verify:operator` (34 checks): an operator sees only its own
+Verified by `pnpm db:verify:operator` (36 checks): an operator sees only its own
 data; a passenger and an anonymous caller see nothing in any operator view; a
-rival cannot read a manifest, add crew elsewhere, or suspend another operator's
-driver; the dashboard numbers track a real booking driven through payment and
-boarding by exactly the right amounts.
+rival cannot read a manifest, add crew elsewhere, or change another operator's
+driver's availability; the dashboard numbers track a real booking driven through
+payment and boarding by exactly the right amounts.
+
+The hierarchy, the two statuses and the scheduling rules are covered by
+`pnpm db:verify:staff` (80 checks) and `pnpm db:verify:schedules` (67), and
+described in [management.md](management.md).
 
 ---
 

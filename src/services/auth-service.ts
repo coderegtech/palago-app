@@ -31,6 +31,8 @@ function toProfile(row: ProfileRow): Profile {
     avatarUrl: row.avatar_url,
     role: row.role,
     operatorId: row.operator_id,
+    accountStatus: row.account_status,
+    mustChangePassword: row.must_change_password,
     emergencyContactName: row.emergency_contact_name,
     emergencyContactPhone: row.emergency_contact_phone,
     createdAt: row.created_at,

@@ -25,6 +25,11 @@ export const ErrorCode = {
   WALLET_LIMIT_EXCEEDED: 'WALLET_LIMIT_EXCEEDED',
   INSUFFICIENT_POINTS: 'INSUFFICIENT_POINTS',
   REWARD_ALREADY_APPLIED: 'REWARD_ALREADY_APPLIED',
+  SCHEDULE_CONFLICT: 'SCHEDULE_CONFLICT',
+  INACTIVE_RESOURCE: 'INACTIVE_RESOURCE',
+  ACCOUNT_DISABLED: 'ACCOUNT_DISABLED',
+  EMAIL_TAKEN: 'EMAIL_TAKEN',
+  LICENSE_EXPIRED: 'LICENSE_EXPIRED',
   NETWORK_ERROR: 'NETWORK_ERROR',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;
@@ -51,6 +56,11 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   WALLET_LIMIT_EXCEEDED: 'That would take your wallet over its limit.',
   INSUFFICIENT_POINTS: 'You do not have enough points for that reward yet.',
   REWARD_ALREADY_APPLIED: 'A reward is already applied to this booking.',
+  SCHEDULE_CONFLICT: 'That clashes with another trip already on the schedule.',
+  INACTIVE_RESOURCE: 'That is no longer active and cannot be used for a new booking.',
+  ACCOUNT_DISABLED: 'This account has been deactivated. Ask your operator or an administrator.',
+  EMAIL_TAKEN: 'An account already exists for that email address.',
+  LICENSE_EXPIRED: 'That licence has expired before the departure date.',
   NETWORK_ERROR: 'No internet connection. Please try again.',
   INTERNAL_ERROR: 'Something went wrong on our end. Please try again.',
 };

@@ -34,34 +34,55 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
       assistants: {
         Row: {
+          availability_status: Database["public"]["Enums"]["availability_status"]
           created_at: string
           id: string
           name: string
           operator_id: string
           phone: string | null
-          status: Database["public"]["Enums"]["staff_status"]
+          unavailable_reason: string | null
           updated_at: string
           user_id: string | null
         }
         Insert: {
+          availability_status?: Database["public"]["Enums"]["availability_status"]
           created_at?: string
           id?: string
           name: string
           operator_id: string
           phone?: string | null
-          status?: Database["public"]["Enums"]["staff_status"]
+          unavailable_reason?: string | null
           updated_at?: string
           user_id?: string | null
         }
         Update: {
+          availability_status?: Database["public"]["Enums"]["availability_status"]
           created_at?: string
           id?: string
           name?: string
           operator_id?: string
           phone?: string | null
-          status?: Database["public"]["Enums"]["staff_status"]
+          unavailable_reason?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -527,35 +548,41 @@ export type Database = {
       }
       drivers: {
         Row: {
+          availability_status: Database["public"]["Enums"]["availability_status"]
           created_at: string
           id: string
+          license_expiration_date: string | null
           license_number: string
           name: string
           operator_id: string
           phone: string | null
-          status: Database["public"]["Enums"]["staff_status"]
+          unavailable_reason: string | null
           updated_at: string
           user_id: string | null
         }
         Insert: {
+          availability_status?: Database["public"]["Enums"]["availability_status"]
           created_at?: string
           id?: string
+          license_expiration_date?: string | null
           license_number: string
           name: string
           operator_id: string
           phone?: string | null
-          status?: Database["public"]["Enums"]["staff_status"]
+          unavailable_reason?: string | null
           updated_at?: string
           user_id?: string | null
         }
         Update: {
+          availability_status?: Database["public"]["Enums"]["availability_status"]
           created_at?: string
           id?: string
+          license_expiration_date?: string | null
           license_number?: string
           name?: string
           operator_id?: string
           phone?: string | null
-          status?: Database["public"]["Enums"]["staff_status"]
+          unavailable_reason?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -858,39 +885,51 @@ export type Database = {
       }
       profiles: {
         Row: {
+          account_status: Database["public"]["Enums"]["account_status"]
           avatar_url: string | null
           created_at: string
+          deactivated_at: string | null
+          deactivated_by: string | null
           email: string
           emergency_contact_name: string | null
           emergency_contact_phone: string | null
           full_name: string
           id: string
+          must_change_password: boolean
           operator_id: string | null
           phone: string | null
           role: Database["public"]["Enums"]["user_role"]
           updated_at: string
         }
         Insert: {
+          account_status?: Database["public"]["Enums"]["account_status"]
           avatar_url?: string | null
           created_at?: string
+          deactivated_at?: string | null
+          deactivated_by?: string | null
           email: string
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           full_name?: string
           id: string
+          must_change_password?: boolean
           operator_id?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
         }
         Update: {
+          account_status?: Database["public"]["Enums"]["account_status"]
           avatar_url?: string | null
           created_at?: string
+          deactivated_at?: string | null
+          deactivated_by?: string | null
           email?: string
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           full_name?: string
           id?: string
+          must_change_password?: boolean
           operator_id?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
@@ -905,6 +944,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      push_tokens: {
+        Row: {
+          created_at: string
+          device_name: string | null
+          id: string
+          last_seen_at: string
+          platform: string
+          token: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_name?: string | null
+          id?: string
+          last_seen_at?: string
+          platform: string
+          token: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_name?: string | null
+          id?: string
+          last_seen_at?: string
+          platform?: string
+          token?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       qr_scans: {
         Row: {
@@ -1424,6 +1493,7 @@ export type Database = {
         Row: {
           assigned_at: string
           assistant_id: string | null
+          blocked_range: unknown
           created_at: string
           driver_id: string | null
           id: string
@@ -1434,6 +1504,7 @@ export type Database = {
         Insert: {
           assigned_at?: string
           assistant_id?: string | null
+          blocked_range: unknown
           created_at?: string
           driver_id?: string | null
           id?: string
@@ -1444,6 +1515,7 @@ export type Database = {
         Update: {
           assigned_at?: string
           assistant_id?: string | null
+          blocked_range?: unknown
           created_at?: string
           driver_id?: string | null
           id?: string
@@ -1617,13 +1689,20 @@ export type Database = {
         Row: {
           actual_arrival_at: string | null
           actual_departure_at: string | null
+          arrival_at: string
           arrival_time: string
+          blocked_range: unknown
           bus_id: string
+          cancelled_by: string | null
+          cancelled_reason: string | null
+          completed_by: string | null
           created_at: string
+          departure_at: string
           departure_date: string
           departure_time: string
           fare: number
           id: string
+          is_active: boolean
           operator_id: string
           route_id: string
           status: Database["public"]["Enums"]["trip_status"]
@@ -1633,13 +1712,20 @@ export type Database = {
         Insert: {
           actual_arrival_at?: string | null
           actual_departure_at?: string | null
+          arrival_at: string
           arrival_time: string
+          blocked_range: unknown
           bus_id: string
+          cancelled_by?: string | null
+          cancelled_reason?: string | null
+          completed_by?: string | null
           created_at?: string
+          departure_at: string
           departure_date: string
           departure_time: string
           fare: number
           id?: string
+          is_active?: boolean
           operator_id: string
           route_id: string
           status?: Database["public"]["Enums"]["trip_status"]
@@ -1649,13 +1735,20 @@ export type Database = {
         Update: {
           actual_arrival_at?: string | null
           actual_departure_at?: string | null
+          arrival_at?: string
           arrival_time?: string
+          blocked_range?: unknown
           bus_id?: string
+          cancelled_by?: string | null
+          cancelled_reason?: string | null
+          completed_by?: string | null
           created_at?: string
+          departure_at?: string
           departure_date?: string
           departure_time?: string
           fare?: number
           id?: string
+          is_active?: boolean
           operator_id?: string
           route_id?: string
           status?: Database["public"]["Enums"]["trip_status"]
@@ -1837,6 +1930,29 @@ export type Database = {
         }
         Relationships: []
       }
+      operator_crew: {
+        Row: {
+          account_email: string | null
+          account_status: Database["public"]["Enums"]["account_status"] | null
+          availability_status:
+            | Database["public"]["Enums"]["availability_status"]
+            | null
+          created_at: string | null
+          crew_kind: string | null
+          has_account: boolean | null
+          id: string | null
+          license_expiration_date: string | null
+          license_number: string | null
+          must_change_password: boolean | null
+          name: string | null
+          operator_id: string | null
+          phone: string | null
+          unavailable_reason: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
       operator_fleet: {
         Row: {
           bus_number: string | null
@@ -2015,12 +2131,15 @@ export type Database = {
       }
       trip_search: {
         Row: {
+          arrival_at: string | null
           arrival_time: string | null
           available_seats: number | null
           bus_id: string | null
           bus_number: string | null
+          bus_status: Database["public"]["Enums"]["operator_status"] | null
           bus_type: Database["public"]["Enums"]["bus_type"] | null
           capacity: number | null
+          departure_at: string | null
           departure_date: string | null
           departure_time: string | null
           destination_city: string | null
@@ -2031,14 +2150,17 @@ export type Database = {
           duration_minutes: number | null
           fare: number | null
           id: string | null
+          is_active: boolean | null
           operator_code: string | null
           operator_id: string | null
           operator_name: string | null
+          operator_status: Database["public"]["Enums"]["operator_status"] | null
           origin_city: string | null
           origin_code: string | null
           origin_name: string | null
           origin_terminal_id: string | null
           route_id: string | null
+          route_status: Database["public"]["Enums"]["operator_status"] | null
           status: Database["public"]["Enums"]["trip_status"] | null
           trip_number: string | null
         }
@@ -2101,10 +2223,27 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: Database["public"]["Enums"]["discount_kind"]
       }
+      active_uid: { Args: never; Returns: string }
       admin_dashboard: { Args: { p_date?: string }; Returns: Json }
       assign_seats_for_booking: {
         Args: { p_booking_id: string }
         Returns: number
+      }
+      assign_trip_crew: {
+        Args: {
+          p_assistant_id?: string
+          p_driver_id?: string
+          p_trip_id: string
+        }
+        Returns: Json
+      }
+      authorize_staff_manage: { Args: { p_user_id: string }; Returns: Json }
+      authorize_staff_provision: {
+        Args: {
+          p_operator_id: string
+          p_role: Database["public"]["Enums"]["user_role"]
+        }
+        Returns: Json
       }
       award_loyalty_for_booking: {
         Args: { p_booking_id: string }
@@ -2129,6 +2268,10 @@ export type Database = {
         Returns: Json
       }
       cancel_sos: { Args: { p_sos_id: string }; Returns: Json }
+      cancel_trip: {
+        Args: { p_reason?: string; p_trip_id: string }
+        Returns: Json
+      }
       confirm_boarding: {
         Args: {
           p_booking_id: string
@@ -2164,7 +2307,63 @@ export type Database = {
         }
         Returns: Json
       }
+      create_crew_member: {
+        Args: {
+          p_kind: string
+          p_license_expiration_date?: string
+          p_license_number?: string
+          p_name: string
+          p_operator_id?: string
+          p_phone?: string
+        }
+        Returns: Json
+      }
+      create_operator: {
+        Args: {
+          p_code: string
+          p_contact_email?: string
+          p_contact_phone?: string
+          p_description?: string
+          p_name: string
+        }
+        Returns: Json
+      }
+      create_route: {
+        Args: {
+          p_destination_terminal_id: string
+          p_distance_km?: number
+          p_duration_minutes: number
+          p_operator_id: string
+          p_origin_terminal_id: string
+        }
+        Returns: Json
+      }
+      create_terminal: {
+        Args: {
+          p_address?: string
+          p_city: string
+          p_code: string
+          p_latitude: number
+          p_longitude: number
+          p_name: string
+          p_province?: string
+        }
+        Returns: Json
+      }
       create_test_payment: { Args: { p_booking_id: string }; Returns: Json }
+      create_trip: {
+        Args: {
+          p_arrival_time: string
+          p_bus_id: string
+          p_departure_date: string
+          p_departure_time: string
+          p_fare: number
+          p_operator_id?: string
+          p_route_id: string
+          p_trip_number: string
+        }
+        Returns: Json
+      }
       current_assistant_id: { Args: never; Returns: string }
       current_driver_id: { Args: never; Returns: string }
       current_operator_id: { Args: never; Returns: string }
@@ -2176,6 +2375,7 @@ export type Database = {
       end_trip: { Args: { p_trip_id: string }; Returns: Json }
       expire_seat_holds: { Args: never; Returns: Json }
       expire_stale_payments: { Args: never; Returns: Json }
+      flag_password_reset: { Args: { p_user_id: string }; Returns: Json }
       get_public_payment: {
         Args: { p_reference: string; p_token: string }
         Returns: Json
@@ -2213,11 +2413,26 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      mark_password_changed: { Args: never; Returns: Json }
       next_booking_reference: { Args: never; Returns: string }
       next_payment_reference: { Args: never; Returns: string }
       next_receipt_number: { Args: never; Returns: string }
       operator_dashboard: { Args: { p_date?: string }; Returns: Json }
       pay_booking_with_wallet: { Args: { p_booking_id: string }; Returns: Json }
+      provision_staff_account: {
+        Args: {
+          p_crew_id?: string
+          p_full_name: string
+          p_license_expiration_date?: string
+          p_license_number?: string
+          p_operator_id: string
+          p_phone?: string
+          p_role: Database["public"]["Enums"]["user_role"]
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      public_setting: { Args: { p_key: string }; Returns: string }
       record_counter_payment: {
         Args: {
           p_booking_id: string
@@ -2230,10 +2445,15 @@ export type Database = {
         Returns: Json
       }
       refund_test_payment: { Args: { p_booking_id: string }; Returns: Json }
+      register_push_token: {
+        Args: { p_device_name?: string; p_platform: string; p_token: string }
+        Returns: Json
+      }
       release_booking_redemption: {
         Args: { p_booking_id: string }
         Returns: number
       }
+      remove_push_token: { Args: { p_token: string }; Returns: Json }
       resolve_sos: {
         Args: { p_note?: string; p_sos_id: string }
         Returns: Json
@@ -2248,11 +2468,63 @@ export type Database = {
         }
         Returns: Json
       }
+      set_account_status: {
+        Args: {
+          p_reason?: string
+          p_status: Database["public"]["Enums"]["account_status"]
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      set_bus_status: {
+        Args: {
+          p_bus_id: string
+          p_reason?: string
+          p_status: Database["public"]["Enums"]["operator_status"]
+        }
+        Returns: Json
+      }
+      set_crew_availability: {
+        Args: {
+          p_crew_id: string
+          p_kind: string
+          p_reason?: string
+          p_status: Database["public"]["Enums"]["availability_status"]
+        }
+        Returns: Json
+      }
+      set_operator_status: {
+        Args: {
+          p_operator_id: string
+          p_reason?: string
+          p_status: Database["public"]["Enums"]["operator_status"]
+        }
+        Returns: Json
+      }
       set_payment_url: {
         Args: { p_payment_id: string; p_payment_url: string }
         Returns: undefined
       }
+      set_route_status: {
+        Args: {
+          p_route_id: string
+          p_status: Database["public"]["Enums"]["operator_status"]
+        }
+        Returns: Json
+      }
+      set_terminal_status: {
+        Args: {
+          p_status: Database["public"]["Enums"]["operator_status"]
+          p_terminal_id: string
+        }
+        Returns: Json
+      }
+      set_trip_active: {
+        Args: { p_active: boolean; p_trip_id: string }
+        Returns: Json
+      }
       set_trip_boarding: { Args: { p_trip_id: string }; Returns: Json }
+      set_turnaround_minutes: { Args: { p_minutes: number }; Returns: Json }
       sos_advance: {
         Args: {
           p_from: Database["public"]["Enums"]["sos_status"][]
@@ -2260,6 +2532,10 @@ export type Database = {
           p_sos_id: string
           p_to: Database["public"]["Enums"]["sos_status"]
         }
+        Returns: Json
+      }
+      staff_activity: {
+        Args: { p_limit?: number; p_user_id: string }
         Returns: Json
       }
       start_trip: { Args: { p_trip_id: string }; Returns: Json }
@@ -2278,7 +2554,77 @@ export type Database = {
         Args: { p_booking_id?: string; p_latitude: number; p_longitude: number }
         Returns: Json
       }
+      trip_arrival_timestamp: {
+        Args: { p_arrival: string; p_date: string; p_departure: string }
+        Returns: string
+      }
       trip_available_seats: { Args: { p_trip_id: string }; Returns: number }
+      turnaround_minutes: { Args: never; Returns: number }
+      unassign_trip_crew: { Args: { p_trip_id: string }; Returns: Json }
+      update_bus: {
+        Args: {
+          p_bus_id: string
+          p_bus_number: string
+          p_name?: string
+          p_operator_id?: string
+          p_plate_number: string
+        }
+        Returns: Json
+      }
+      update_crew_member: {
+        Args: {
+          p_crew_id: string
+          p_kind: string
+          p_license_expiration_date?: string
+          p_license_number?: string
+          p_name: string
+          p_phone?: string
+        }
+        Returns: Json
+      }
+      update_operator: {
+        Args: {
+          p_contact_email?: string
+          p_contact_phone?: string
+          p_description?: string
+          p_name: string
+          p_operator_id: string
+        }
+        Returns: Json
+      }
+      update_route: {
+        Args: {
+          p_distance_km?: number
+          p_duration_minutes: number
+          p_route_id: string
+        }
+        Returns: Json
+      }
+      update_terminal: {
+        Args: {
+          p_address?: string
+          p_city: string
+          p_latitude: number
+          p_longitude: number
+          p_name: string
+          p_province?: string
+          p_terminal_id: string
+        }
+        Returns: Json
+      }
+      update_trip: {
+        Args: {
+          p_arrival_time: string
+          p_bus_id: string
+          p_departure_date: string
+          p_departure_time: string
+          p_fare: number
+          p_route_id: string
+          p_trip_id: string
+          p_trip_number: string
+        }
+        Returns: Json
+      }
       validate_booking_qr: {
         Args: {
           p_booking_id: string
@@ -2324,7 +2670,9 @@ export type Database = {
       }
     }
     Enums: {
+      account_status: "ACTIVE" | "INACTIVE"
       assignment_status: "ASSIGNED" | "ACTIVE" | "COMPLETED" | "CANCELLED"
+      availability_status: "AVAILABLE" | "UNAVAILABLE"
       booking_source: "MOBILE_APP" | "WEB" | "OPERATOR" | "TERMINAL"
       booking_status:
         | "PENDING"
@@ -2390,7 +2738,6 @@ export type Database = {
         | "RESPONDING"
         | "RESOLVED"
         | "CANCELLED"
-      staff_status: "ACTIVE" | "INACTIVE" | "SUSPENDED"
       ticket_type: "DIGITAL" | "PRINTED"
       trip_seat_status: "AVAILABLE" | "HELD" | "BOOKED" | "BLOCKED"
       trip_status:
@@ -2538,7 +2885,9 @@ export const Constants = {
   },
   public: {
     Enums: {
+      account_status: ["ACTIVE", "INACTIVE"],
       assignment_status: ["ASSIGNED", "ACTIVE", "COMPLETED", "CANCELLED"],
+      availability_status: ["AVAILABLE", "UNAVAILABLE"],
       booking_source: ["MOBILE_APP", "WEB", "OPERATOR", "TERMINAL"],
       booking_status: [
         "PENDING",
@@ -2611,7 +2960,6 @@ export const Constants = {
         "RESOLVED",
         "CANCELLED",
       ],
-      staff_status: ["ACTIVE", "INACTIVE", "SUSPENDED"],
       ticket_type: ["DIGITAL", "PRINTED"],
       trip_seat_status: ["AVAILABLE", "HELD", "BOOKED", "BLOCKED"],
       trip_status: [

@@ -10,6 +10,8 @@
  */
 
 import type {
+  AccountStatus,
+  AvailabilityStatus,
   AssignmentStatus,
   BookingStatus,
   BusType,
@@ -24,7 +26,6 @@ import type {
   SOSStatus,
   ScanType,
   SeatType,
-  StaffStatus,
   TripSeatStatus,
   TripStatus,
   UserRole,
@@ -51,6 +52,14 @@ export interface Profile {
   role: UserRole;
   /** Operator this staff account belongs to. NULL for passengers and admins. */
   operatorId: UUID | null;
+  /**
+   * Whether this account may sign in at all. A deactivated one can still load
+   * its own profile — that is how the app knows to say why it stopped working —
+   * but RLS answers it nothing else.
+   */
+  accountStatus: AccountStatus;
+  /** Set when an account is provisioned or reset with a temporary password. */
+  mustChangePassword: boolean;
   emergencyContactName: string | null;
   emergencyContactPhone: string | null;
   createdAt: ISODateTime;
@@ -287,9 +296,16 @@ export interface Driver {
   operatorId: UUID;
   userId: UUID | null;
   licenseNumber: string;
+  licenseExpirationDate: ISODate | null;
   name: string;
   phone: string | null;
-  status: StaffStatus;
+  /**
+   * Whether they may be given a NEW trip. Whether they may sign in is
+   * `Profile.accountStatus` — the two are deliberately separate, so a driver on
+   * a rest day keeps their access and simply is not rostered.
+   */
+  availabilityStatus: AvailabilityStatus;
+  unavailableReason: string | null;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
 }
@@ -300,7 +316,8 @@ export interface Assistant {
   userId: UUID | null;
   name: string;
   phone: string | null;
-  status: StaffStatus;
+  availabilityStatus: AvailabilityStatus;
+  unavailableReason: string | null;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
 }

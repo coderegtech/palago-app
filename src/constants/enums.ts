@@ -138,12 +138,31 @@ export const DiscountType = {
 } as const;
 export type DiscountType = (typeof DiscountType)[keyof typeof DiscountType];
 
-export const StaffStatus = {
+/**
+ * Whether an account may sign in. Deliberately NOT the same thing as whether a
+ * driver is free for work — see `AvailabilityStatus`. The single `StaffStatus`
+ * this replaced could not say "can log in, but is on a rest day", which is the
+ * ordinary case for crew.
+ */
+export const AccountStatus = {
   ACTIVE: 'ACTIVE',
   INACTIVE: 'INACTIVE',
-  SUSPENDED: 'SUSPENDED',
 } as const;
-export type StaffStatus = (typeof StaffStatus)[keyof typeof StaffStatus];
+export type AccountStatus = (typeof AccountStatus)[keyof typeof AccountStatus];
+
+/** Whether a driver or conductor may be given a NEW trip. Nothing to do with sign-in. */
+export const AvailabilityStatus = {
+  AVAILABLE: 'AVAILABLE',
+  UNAVAILABLE: 'UNAVAILABLE',
+} as const;
+export type AvailabilityStatus = (typeof AvailabilityStatus)[keyof typeof AvailabilityStatus];
+
+/** DRIVER or ASSISTANT, for the functions that take either. */
+export const CrewKind = {
+  DRIVER: 'DRIVER',
+  ASSISTANT: 'ASSISTANT',
+} as const;
+export type CrewKind = (typeof CrewKind)[keyof typeof CrewKind];
 
 export const AssignmentStatus = {
   ASSIGNED: 'ASSIGNED',

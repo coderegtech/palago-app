@@ -441,3 +441,20 @@ verify_jwt = true
 
 [functions.confirm-boarding]
 verify_jwt = true
+
+# send-push is called by a database trigger through pg_net, which has no PalaGo
+# session to present, so a JWT check would reject every real call. It is
+# authorised instead by the shared secret in `x-palago-push-secret`, which it
+# requires and compares in constant time — and it refuses to run at all if
+# PUSH_WEBHOOK_SECRET is unset, so a misconfigured deploy fails closed rather
+# than exposing an open push endpoint. See docs/notifications.md.
+[functions.send-push]
+verify_jwt = false
+
+# manage-staff creates accounts for other people, so it needs the service-role
+# key — which is exactly why the caller must be a real signed-in session. Every
+# authorisation rule it applies lives in SQL and is asked as the caller, not as
+# the service role; the service role is used only for the auth-admin calls that
+# have no other route (create a user, set a password, ban or unban).
+[functions.manage-staff]
+verify_jwt = true

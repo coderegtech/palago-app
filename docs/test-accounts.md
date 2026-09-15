@@ -26,8 +26,10 @@ PalawanGo2026
 | `operator@palago.test` | `PalawanGo2026` | OPERATOR | Cherry Bus | `/(operator)/dashboard` | The operator console: dashboard, travel data, manifest, crew, fleet, scanner. |
 | `roro@palago.test` | `PalawanGo2026` | OPERATOR | RoRo Bus | `/(operator)/dashboard` | The **rival** operator. Its whole purpose is proving Cherry cannot see RoRo's trips, revenue, manifests or buses, and vice versa. |
 | `driver@palago.test` | `PalawanGo2026` | DRIVER | Cherry Bus | `/(driver)/duty` | The crew app: assigned trips, start/end trip, GPS publishing, door scanner. Linked to driver record `DRV-001` (Juan Santos). |
+| `driver2@palago.test` | `PalawanGo2026` | DRIVER | Cherry Bus | `/(driver)/duty` | Cherry's **second** driver, `DRV-003` (Rosa Delgado). Eight departures across three days cannot legally be crewed by one person — the exclusion constraints refuse it — so the seed allocates greedily and this one takes whatever Juan Santos cannot. Which trips that is depends on the schedule, so resolve the crew from the assignment rather than assuming. |
 | `assistant@palago.test` | `PalawanGo2026` | ASSISTANT | Cherry Bus | `/(driver)/duty` | Same crew app, but **cannot publish position** — only the assigned driver's phone does, so the marker cannot jump between two devices. Linked to assistant Maria Reyes. |
-| `admin@palago.test` | `PalawanGo2026` | ADMIN | — | `/(user)/home` | Full read access via `is_admin()`. Not tied to an operator, so the operator dashboard returns `scope: NO_OPERATOR` and shows a message rather than inventing figures. There is no admin dashboard in this build. |
+| `assistant2@palago.test` | `PalawanGo2026` | ASSISTANT | Cherry Bus | `/(driver)/duty` | Cherry's second conductor, Nilo Cruz, for the same reason. |
+| `admin@palago.test` | `PalawanGo2026` | ADMIN | — | `/(admin)/overview` | Full read access via `is_admin()`. Not tied to an operator, so the operator dashboard returns `scope: NO_OPERATOR` and shows a message rather than inventing figures. The only account that can create an operator login. |
 
 ## Notes worth knowing before you sign in
 
@@ -74,3 +76,17 @@ If you change an account's role or operator in the seed, the suites will notice.
 ```bash
 pnpm db:verify:all
 ```
+
+---
+
+## Accounts these tests create
+
+`verify-staff-accounts.mjs` provisions real accounts through `manage-staff`, with
+emails stamped by the run (`ops-<run>@palago.test`, `wheel-<run>@palago.test`). A
+client cannot delete an auth user, so they accumulate until the next
+`pnpm db:reset` — which is what clears them. None of them is seeded, and no other
+suite depends on one.
+
+Two seeded rows exist to be *refused* rather than used: RoRo's crew (Pedro Ramos
+and Ana Lim) have no login at all. A roster with people on it who never open the
+app is the normal case, and something has to exercise it.

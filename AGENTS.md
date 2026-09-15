@@ -179,6 +179,13 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
   from `supabase status`, so `.env` can stay pointed at the hosted project. A remote run needs
   `VERIFY_ALLOW_REMOTE=1`. New suites must load their target through `loadVerifyEnv()` — never read
   `.env` directly again; that is how `db:verify:all` used to write test money into production.
+- **A subscription's `SUBSCRIBED` is not a promise that it is receiving yet.** Realtime
+  acknowledges the channel before the subscription is visible to the process reading the
+  write-ahead log, and a row written inside that window is missed outright — nothing is replayed.
+  On its own `verify-notifications` passed every time; after the other eleven suites had run it
+  failed every time, which looks exactly like a missing publication and is not. The window widens
+  when the replication stream is busy. Anything that subscribes and then immediately causes its own
+  event has to allow for it.
 - **The verify suites are only meaningful straight after `pnpm db:reset`.** Tracking and loyalty
   consume seed state — they depart the seeded trips and award points — so a second run fails on
   "a SCHEDULED Cherry trip exists" and "with no points", with no code having changed. Reset, then
@@ -188,6 +195,55 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
   now tampers a significant character, and the verifier rejects non-canonical spellings. If a
   security check fails intermittently, find the mechanism; don't warm something and re-run.
 
+- **Account status and availability are two fields and must stay two fields.**
+  `profiles.account_status` says whether somebody may sign in;
+  `drivers.availability_status` / `assistants.availability_status` say whether they may be given a
+  new trip. A driver on a rest day is ACTIVE + UNAVAILABLE — they open the app, see their history,
+  and are not rostered. The single `staff_status` these replaced could not express that at all, so
+  it was dropped rather than left alongside them. Never add a third status that means "sort of
+  both".
+- **`active_uid()`, not `auth.uid()`, in any policy that asks "is this row mine?"** The role
+  helpers (`is_admin`, `current_operator_id`, `current_driver_id`, `current_assistant_id`) are
+  gated on `account_status`, but nineteen policies tested `auth.uid()` directly and kept answering
+  a deactivated account — its token stays syntactically valid for up to an hour after the door
+  closes. `active_uid()` is `auth.uid()` for an account that may sign in and NULL for one that may
+  not. The single exception is reading your own profile, which stays open so the app can say why it
+  stopped working.
+- **A schedule clash is a constraint, never a check.** `trips.blocked_range` is the journey plus a
+  turnaround buffer, and `EXCLUDE USING gist (bus_id WITH =, blocked_range WITH &&)` makes an
+  overlap impossible under concurrency — two operators pressing Save at the same instant would both
+  read "free" from a check-then-insert and both write. `trip_assignments` carries a copy of its
+  trip's window for the same reason, because an exclusion constraint can only read its own table;
+  two triggers keep the copy honest. The buffer is configuration, which is why `blocked_range` is
+  trigger-maintained and not a generated column: a generated column must be IMMUTABLE and cannot
+  read a setting.
+- **Cancelling or withdrawing a trip must release its crew, not just its coach.** The constraints on
+  `trip_assignments` read the assignment's own status, not its trip's, so an assignment left
+  ASSIGNED on a cancelled trip goes on blocking that driver for a journey nobody is making. Caught
+  by running `verify-schedules` twice: the second run failed on a conflict the first run had left
+  behind.
+- **An arrival at or before the departure time is the next day.** `trip_arrival_timestamp` and
+  `src/utils/schedule.ts` both encode it, and they have to agree — an overnight sailing leaving at
+  20:00 and arriving 06:00 is ten hours, not minus fourteen, and getting it backwards makes every
+  overnight departure look free. `timestamp`, never `timestamptz`: Palawan is one zone and
+  timestamptz arithmetic depends on the session's TimeZone, so two clients would disagree about
+  what overlaps.
+- **Reference data has no delete, for anyone.** Operators, terminals, routes, buses and trips are
+  referenced by bookings, payments, tickets and boarding scans, so every "Delete" in the console is
+  deactivation and every write goes through an audited function — the client INSERT/UPDATE/DELETE
+  on all five was withdrawn. A suite that used to clean up with `DELETE` now stands its fixtures
+  down instead, and stamps its codes per run because the rows stay.
+- **Only an admin creates an operator account, and nobody creates an admin.** `manage-staff` is the
+  one path to an account somebody else will use; it needs the service-role key, so it is an Edge
+  Function, and every rule it applies is asked of SQL as the signed-in caller. It authorises BEFORE
+  creating the auth user, so a refusal leaves no orphan, and deletes the user if provisioning then
+  fails — a compensating write, not a rollback, and logged loudly when even that fails.
+- **Do not assume the seeded driver is on a given trip.** Cherry Bus has more departures than one
+  driver can legally cover, so the seed allocates crew greedily and which of its two is on a trip is
+  the allocator's decision. `verify-boarding` resolves the door's crew from the assignment and signs
+  in as them; a test that hardcodes `driver@palago.test` breaks the next time the schedule moves and
+  says nothing about the code.
+
 ## Commands
 
 ```bash
@@ -195,5 +251,10 @@ pnpm check
 ```
 
 `typecheck` · `lint` · `test` · `web` · `android` · `db:start` · `db:reset` · `db:types`
+
+`pnpm db:verify:all` runs fifteen suites against the local stack. It needs
+`pnpm functions:serve` running — and exactly one copy of it: two `supabase functions serve`
+processes fight over the edge-runtime container and take it down, which surfaces as
+`503 name resolution failed` and looks like a broken function.
 
 The web dev server runs on port 8090 (8081 is taken on this machine).

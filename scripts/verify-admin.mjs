@@ -62,23 +62,64 @@ const anon = client();
 
 // Distinctive codes so a leftover row from a failed run is obvious and cannot
 // collide with the seed's own data.
-const TAG = 'ZZTEST';
+// Stamped with the run. Reference data has no hard-delete path any more —
+// operators, terminals, routes and buses are referenced by trips, bookings and
+// tickets, so they are deactivated, never removed — which means a second run
+// cannot reuse the same codes.
+const TAG = `ZZ${Date.now().toString(36).slice(-5).toUpperCase()}`;
 
 /** Delete in FK order: routes reference terminals with ON DELETE RESTRICT. */
-async function cleanup() {
+/**
+ * Stand everything this run made down again.
+ *
+ * Deactivation, not deletion. `20260915000032_bookable_trips.sql` withdrew
+ * every client DELETE on reference data, because an operator, a coach or a
+ * terminal is referenced by trips, bookings, payments and tickets, and removing
+ * one would take the history of a journey with it. So the honest "clean up" is
+ * the same thing the console's Delete button does: mark it inactive, where it
+ * can no longer be used for anything new.
+ */
+async function standDown() {
   const { data: operators } = await admin.supabase
     .from('operators')
     .select('id')
     .like('code', `${TAG}%`);
-  for (const row of operators ?? []) {
-    await admin.supabase.from('routes').delete().eq('operator_id', row.id);
-    await admin.supabase.from('buses').delete().eq('operator_id', row.id);
-    await admin.supabase.from('operators').delete().eq('id', row.id);
-  }
-  await admin.supabase.from('terminals').delete().like('code', `${TAG}%`);
-}
 
-await cleanup();
+  for (const row of operators ?? []) {
+    const { data: buses } = await admin.supabase
+      .from('buses')
+      .select('id')
+      .eq('operator_id', row.id);
+    for (const bus of buses ?? []) {
+      await admin.supabase.rpc('set_bus_status', { p_bus_id: bus.id, p_status: 'INACTIVE' });
+    }
+
+    const { data: routes } = await admin.supabase
+      .from('routes')
+      .select('id')
+      .eq('operator_id', row.id);
+    for (const route of routes ?? []) {
+      await admin.supabase.rpc('set_route_status', { p_route_id: route.id, p_status: 'INACTIVE' });
+    }
+
+    await admin.supabase.rpc('set_operator_status', {
+      p_operator_id: row.id,
+      p_status: 'INACTIVE',
+      p_reason: 'verify-admin cleanup',
+    });
+  }
+
+  const { data: terminals } = await admin.supabase
+    .from('terminals')
+    .select('id')
+    .like('code', `${TAG}%`);
+  for (const terminal of terminals ?? []) {
+    await admin.supabase.rpc('set_terminal_status', {
+      p_terminal_id: terminal.id,
+      p_status: 'INACTIVE',
+    });
+  }
+}
 
 // ---------------------------------------------------------------------------
 console.log('\nWho may read platform analytics');
@@ -128,57 +169,79 @@ check(
 console.log('\nCreating reference data');
 // ---------------------------------------------------------------------------
 
-const newOperator = await admin.supabase
+// Through the functions reference data moved into, not straight at the tables:
+// an edit or a deactivation that leaves no audit trail cannot answer "who took
+// that coach off the road, and when".
+const directOperator = await admin.supabase
   .from('operators')
-  .insert({ name: 'Test Lines', code: `${TAG}OP`, contact_email: 'ops@test.invalid' })
-  .select('id')
-  .single();
+  .insert({ name: 'Written Straight To The Table', code: `${TAG}RAW` });
+check('nobody creates an operator by writing the table', Boolean(directOperator.error));
+
+const newOperator = await admin.supabase.rpc('create_operator', {
+  p_name: 'Test Lines',
+  p_code: `${TAG}OP`,
+  p_contact_email: 'ops@test.invalid',
+});
 check('an admin can create an operator', !newOperator.error, newOperator.error?.message);
 const operatorId = newOperator.data?.id;
 
-const terminalA = await admin.supabase
-  .from('terminals')
-  .insert({ name: 'Test North', code: `${TAG}A`, city: 'Taytay', latitude: 10.8, longitude: 119.5 })
-  .select('id')
-  .single();
-const terminalB = await admin.supabase
-  .from('terminals')
-  .insert({ name: 'Test South', code: `${TAG}B`, city: 'Narra', latitude: 9.27, longitude: 118.4 })
-  .select('id')
-  .single();
-check('an admin can create terminals', !terminalA.error && !terminalB.error, terminalA.error?.message);
-
-const badTerminal = await admin.supabase
-  .from('terminals')
-  .insert({ name: 'Off world', code: `${TAG}X`, city: 'Nowhere', latitude: 200, longitude: 0 });
+const operatorByOperator = await cherry.supabase.rpc('create_operator', {
+  p_name: 'Self Promotion',
+  p_code: `${TAG}SP`,
+});
 check(
-  'an impossible latitude is refused by the schema',
-  Boolean(badTerminal.error),
-  badTerminal.error?.message,
+  'an operator cannot create another operator',
+  operatorByOperator.error?.message === 'FORBIDDEN',
+  operatorByOperator.error?.message ?? 'it succeeded',
 );
 
-const newRoute = await admin.supabase
-  .from('routes')
-  .insert({
-    operator_id: operatorId,
-    origin_terminal_id: terminalA.data?.id,
-    destination_terminal_id: terminalB.data?.id,
-    duration_minutes: 240,
-  })
-  .select('id')
-  .single();
+const terminalA = await admin.supabase.rpc('create_terminal', {
+  p_name: 'Test North',
+  p_code: `${TAG}A`,
+  p_city: 'Taytay',
+  p_latitude: 10.8,
+  p_longitude: 119.5,
+});
+const terminalB = await admin.supabase.rpc('create_terminal', {
+  p_name: 'Test South',
+  p_code: `${TAG}B`,
+  p_city: 'Narra',
+  p_latitude: 9.27,
+  p_longitude: 118.4,
+});
+check('an admin can create terminals', !terminalA.error && !terminalB.error, terminalA.error?.message);
+
+const badTerminal = await admin.supabase.rpc('create_terminal', {
+  p_name: 'Off world',
+  p_code: `${TAG}X`,
+  p_city: 'Nowhere',
+  p_latitude: 200,
+  p_longitude: 0,
+});
+check(
+  'an impossible latitude is refused by the schema',
+  badTerminal.error?.message === 'VALIDATION_ERROR',
+  badTerminal.error?.message ?? 'it succeeded',
+);
+
+const newRoute = await admin.supabase.rpc('create_route', {
+  p_operator_id: operatorId,
+  p_origin_terminal_id: terminalA.data?.id,
+  p_destination_terminal_id: terminalB.data?.id,
+  p_duration_minutes: 240,
+});
 check('an admin can create a route', !newRoute.error, newRoute.error?.message);
 
-const sameTerminal = await admin.supabase.from('routes').insert({
-  operator_id: operatorId,
-  origin_terminal_id: terminalA.data?.id,
-  destination_terminal_id: terminalA.data?.id,
-  duration_minutes: 60,
+const sameTerminal = await admin.supabase.rpc('create_route', {
+  p_operator_id: operatorId,
+  p_origin_terminal_id: terminalA.data?.id,
+  p_destination_terminal_id: terminalA.data?.id,
+  p_duration_minutes: 60,
 });
 check(
   'a route that starts and ends in the same place is refused',
-  Boolean(sameTerminal.error),
-  sameTerminal.error?.message,
+  sameTerminal.error?.message === 'VALIDATION_ERROR',
+  sameTerminal.error?.message ?? 'it succeeded',
 );
 
 // ---------------------------------------------------------------------------
@@ -309,16 +372,16 @@ check(
   rivalBus.error?.message,
 );
 
-const rivalRoute = await roro.supabase.from('routes').insert({
-  operator_id: operatorId,
-  origin_terminal_id: terminalA.data?.id,
-  destination_terminal_id: terminalB.data?.id,
-  duration_minutes: 120,
+const rivalRoute = await roro.supabase.rpc('create_route', {
+  p_operator_id: operatorId,
+  p_origin_terminal_id: terminalA.data?.id,
+  p_destination_terminal_id: terminalB.data?.id,
+  p_duration_minutes: 120,
 });
 check(
   "an operator cannot add a route to another operator's network",
-  Boolean(rivalRoute.error),
-  rivalRoute.error?.message,
+  rivalRoute.error?.message === 'FORBIDDEN',
+  rivalRoute.error?.message ?? 'it succeeded',
 );
 
 // An operator adding to its OWN fleet is allowed — the same RPC, different owner.
@@ -334,7 +397,16 @@ const ownBus = await cherry.supabase.rpc('create_bus', {
   p_capacity: 12,
 });
 check('but an operator CAN add to its own fleet', !ownBus.error, ownBus.error?.message);
-if (ownBus.data?.id) await admin.supabase.from('buses').delete().eq('id', ownBus.data.id);
+
+const directBusDelete = await admin.supabase.from('buses').delete().eq('id', ownBus.data?.id).select();
+check(
+  'and no client can delete a coach, not even an admin',
+  directBusDelete.error !== null || (directBusDelete.data ?? []).length === 0,
+  JSON.stringify(directBusDelete.data),
+);
+if (ownBus.data?.id) {
+  await cherry.supabase.rpc('set_bus_status', { p_bus_id: ownBus.data.id, p_status: 'INACTIVE' });
+}
 
 // ---------------------------------------------------------------------------
 console.log('\nThe trail it leaves');
@@ -350,13 +422,27 @@ check(
   JSON.stringify(audit),
 );
 
-await cleanup();
+await standDown();
 
 const { data: leftover } = await admin.supabase
   .from('operators')
-  .select('id')
+  .select('code, status')
   .like('code', `${TAG}%`);
-check('the suite cleans up after itself', (leftover?.length ?? 0) === 0, String(leftover?.length));
+check(
+  'everything the suite created is stood down, and still on the record',
+  (leftover?.length ?? 0) > 0 && (leftover ?? []).every((o) => o.status === 'INACTIVE'),
+  JSON.stringify(leftover),
+);
+
+const { data: leftBuses } = await admin.supabase
+  .from('buses')
+  .select('status')
+  .like('bus_number', `${TAG}%`);
+check(
+  'including its coaches',
+  (leftBuses ?? []).every((b) => b.status === 'INACTIVE'),
+  JSON.stringify(leftBuses),
+);
 
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) {

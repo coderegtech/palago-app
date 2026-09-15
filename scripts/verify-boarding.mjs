@@ -27,6 +27,7 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadVerifyEnv } from './_verify-env.mjs';
+import { makeInvoke } from './_verify-invoke.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const { url: URL_, key: KEY } = loadVerifyEnv();
@@ -54,25 +55,12 @@ function check(name, ok, detail = '') {
   }
 }
 
-async function invoke(fn, body, accessToken) {
-  const response = await fetch(`${URL_}/functions/v1/${fn}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: KEY,
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-  return { status: response.status, body: await response.json().catch(() => null) };
-}
+const invoke = makeInvoke(URL_, KEY);
 
 const passenger = await signIn('passenger@palago.test');
 const other = await signIn('passenger2@palago.test');
 const cherry = await signIn('operator@palago.test');
 const roro = await signIn('roro@palago.test');
-const driver = await signIn('driver@palago.test');
-const assistant = await signIn('assistant@palago.test');
 const admin = await signIn('admin@palago.test');
 
 async function releaseAllHolds() {
@@ -162,6 +150,46 @@ console.log('\nA pass is not issued before payment');
 console.log('\nIssuing a pass for a paid booking');
 // ---------------------------------------------------------------------------
 const { booking: paidBooking, trip: paidTrip } = await makeBooking({ paid: true });
+
+/**
+ * The crew actually rostered on the door, signed in as themselves.
+ *
+ * Not `driver@palago.test` by name. Cherry Bus has more departures than one
+ * driver can cover, so which of its two is on a given trip is the allocator's
+ * decision — and a test that assumes an answer breaks the next time the
+ * schedule moves, saying nothing about the code. Resolved from the assignment,
+ * the same way `relatedTrips` resolves everything else.
+ */
+const doorCrew = await (async () => {
+  const { data: assignment } = await admin.supabase
+    .from('trip_assignments')
+    .select('driver_id, assistant_id')
+    .eq('trip_id', paidTrip.id)
+    .in('status', ['ASSIGNED', 'ACTIVE'])
+    .single();
+
+  const { data: d } = await admin.supabase
+    .from('drivers')
+    .select('user_id')
+    .eq('id', assignment.driver_id)
+    .single();
+  const { data: a } = await admin.supabase
+    .from('assistants')
+    .select('user_id')
+    .eq('id', assignment.assistant_id)
+    .single();
+
+  const emailFor = async (userId) =>
+    (await admin.supabase.from('profiles').select('email').eq('id', userId).single()).data.email;
+
+  return {
+    driver: await signIn(await emailFor(d.user_id)),
+    assistant: await signIn(await emailFor(a.user_id)),
+  };
+})();
+
+const driver = doorCrew.driver;
+const assistant = doorCrew.assistant;
 
 let qrPayload = null;
 {

@@ -21,6 +21,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { loadVerifyEnv } from './_verify-env.mjs';
+import { makeInvoke } from './_verify-invoke.mjs';
 
 const { url: URL_, key: KEY } = loadVerifyEnv();
 const PASSWORD = 'PalawanGo2026';
@@ -47,22 +48,12 @@ function check(name, ok, detail = '') {
   }
 }
 
-async function invoke(fn, body, accessToken) {
-  const res = await fetch(`${URL_}/functions/v1/${fn}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: KEY,
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-  return { status: res.status, body: await res.json().catch(() => null) };
-}
+const invoke = makeInvoke(URL_, KEY);
 
 const passenger = await signIn('passenger@palago.test');
 const other = await signIn('passenger2@palago.test');
 const driver = await signIn('driver@palago.test');
+const cherry = await signIn('operator@palago.test');
 
 async function points(session) {
   const { data } = await session.supabase
@@ -108,7 +99,7 @@ async function completeTripCycle(session, tripId) {
   // Open boarding, board at this trip, then depart. This suite used to depart
   // first and board afterwards, which only worked because boarding never
   // checked that the bus was still at the door.
-  await driver.supabase.rpc('set_trip_boarding', { p_trip_id: tripId });
+  await cherry.supabase.rpc('set_trip_boarding', { p_trip_id: tripId });
   const pass = await invoke('get-boarding-pass', { bookingId: booking.bookingId }, session.accessToken);
   await invoke(
     'confirm-boarding',
@@ -121,11 +112,11 @@ async function completeTripCycle(session, tripId) {
       }),
       tripId,
     },
-    driver.accessToken,
+    cherry.accessToken,
   );
-  await driver.supabase.rpc('start_trip', { p_trip_id: tripId });
+  await cherry.supabase.rpc('start_trip', { p_trip_id: tripId });
 
-  const ended = await driver.supabase.rpc('end_trip', { p_trip_id: tripId });
+  const ended = await cherry.supabase.rpc('end_trip', { p_trip_id: tripId });
   return { booking, pointsAwarded: ended.data?.pointsAwarded ?? 0 };
 }
 
@@ -133,14 +124,18 @@ async function completeTripCycle(session, tripId) {
 async function earnAtLeast(session, target) {
   // A trip already open for boarding is still one you can travel on — and
   // earlier suites leave their door open, because that is what boarding does.
-  const { data: trips } = await driver.supabase
-    .from('driver_assignments')
-    .select('trip_id')
-    .in('trip_status', ['SCHEDULED', 'BOARDING']);
+  // Read from the operator, not from one driver's roster. Cherry Bus has more
+  // departures than a single driver can cover, so `driver_assignments` for
+  // `driver@palago.test` is a slice of the schedule — and this helper needs to
+  // keep travelling until the balance is high enough.
+  const { data: trips } = await cherry.supabase
+    .from('operator_trip_overview')
+    .select('id')
+    .in('status', ['SCHEDULED', 'BOARDING']);
 
   for (const t of trips ?? []) {
     if ((await points(session)).points_balance >= target) break;
-    await completeTripCycle(session, t.trip_id);
+    await completeTripCycle(session, t.id);
   }
   return (await points(session)).points_balance;
 }
@@ -202,6 +197,8 @@ check('an anonymous caller sees no accounts', anonPoints.length === 0, `saw ${an
 console.log('\nPaying is not travelling');
 // ---------------------------------------------------------------------------
 
+// This scenario asserts what a DRIVER can do, so it must be a trip that driver
+// is actually rostered on — which is now a subset of the operator's schedule.
 const trip = (
   await driver.supabase
     .from('driver_assignments')

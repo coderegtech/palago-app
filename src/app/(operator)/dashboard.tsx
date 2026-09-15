@@ -1,5 +1,6 @@
 import {
-  Bus,
+  Bus as BusIcon,
+  CalendarDays,
   CheckCircle,
   CircleAlert,
   Banknote,
@@ -10,9 +11,9 @@ import {
   TrendingUp,
   Users,
 } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
 import { Alert } from '@/components/ui/alert';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
@@ -338,6 +339,35 @@ function SOSMonitoring() {
   );
 }
 
+interface ManagementLinkProps {
+  label: string;
+  hint: string;
+  icon: React.ReactNode;
+  href: Href;
+}
+
+function ManagementLink({ label, hint, icon, href }: ManagementLinkProps) {
+  const router = useRouter();
+
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={`${label}: ${hint}`}
+      onPress={() => router.push(href)}
+      className="min-w-[30%] flex-1">
+      <Card className="h-full gap-2 active:bg-primary-soft">
+        <View className="h-9 w-9 items-center justify-center rounded-full bg-primary-soft">
+          {icon}
+        </View>
+        <Text variant="bodyStrong">{label}</Text>
+        <Text variant="caption" tone="muted">
+          {hint}
+        </Text>
+      </Card>
+    </Pressable>
+  );
+}
+
 export default function OperatorDashboardScreen() {
   const router = useRouter();
   const { profile } = useAuth();
@@ -378,7 +408,7 @@ export default function OperatorDashboardScreen() {
           <>
             <View className="flex-row flex-wrap gap-3">
               <StatTile
-                icon={<Bus size={18} color={Colors.primary} />}
+                icon={<BusIcon size={18} color={Colors.primary} />}
                 label="Trips today"
                 value={String(dashboard.data?.today?.trips ?? 0)}
               />
@@ -516,14 +546,44 @@ export default function OperatorDashboardScreen() {
                   Crew
                 </Text>
                 <Text variant="subtitle">
-                  {(dashboard.data?.crew?.activeDrivers ?? 0) +
-                    (dashboard.data?.crew?.activeAssistants ?? 0)}
+                  {(dashboard.data?.crew?.availableDrivers ?? 0) +
+                    (dashboard.data?.crew?.availableAssistants ?? 0)}
                 </Text>
+                {/* Available for a trip, which is not the same as able to sign
+                    in — somebody on a rest day is one and not the other. */}
                 <Text variant="caption" tone="muted">
-                  {dashboard.data?.crew?.activeDrivers ?? 0} drivers ·{' '}
-                  {dashboard.data?.crew?.activeAssistants ?? 0} assistants
+                  available: {dashboard.data?.crew?.availableDrivers ?? 0} of{' '}
+                  {dashboard.data?.crew?.drivers ?? 0} drivers,{' '}
+                  {dashboard.data?.crew?.availableAssistants ?? 0} of{' '}
+                  {dashboard.data?.crew?.assistants ?? 0} crew
                 </Text>
               </Card>
+            </View>
+
+            {/*
+              The management screens. Not tabs: the bar is already at five,
+              which is the most that stays legible on a phone, and these are
+              visited to set something up rather than during a shift.
+            */}
+            <View className="flex-row flex-wrap gap-3">
+              <ManagementLink
+                label="Schedule"
+                hint="Departures, coaches and crew"
+                icon={<CalendarDays size={18} color={Colors.primary} />}
+                href="/(operator)/trips"
+              />
+              <ManagementLink
+                label="Fleet"
+                hint="Buses and RoRo coaches"
+                icon={<BusIcon size={18} color={Colors.primary} />}
+                href="/(operator)/buses"
+              />
+              <ManagementLink
+                label="Crew"
+                hint="Conductors and assistants"
+                icon={<Users size={18} color={Colors.primary} />}
+                href="/(operator)/crew"
+              />
             </View>
 
             {/* SOS Monitoring - Phase 11 */}

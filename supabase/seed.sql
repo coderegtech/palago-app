@@ -11,9 +11,17 @@
 --   passenger2@palago.test   USER       (a second passenger, for isolation tests)
 --   operator@palago.test     OPERATOR   Cherry Bus
 --   roro@palago.test         OPERATOR   RoRo Bus
---   driver@palago.test       DRIVER     Cherry Bus
---   assistant@palago.test    ASSISTANT  Cherry Bus
+--   driver@palago.test       DRIVER     Cherry Bus (Juan Santos)
+--   driver2@palago.test      DRIVER     Cherry Bus (Rosa Delgado)
+--   assistant@palago.test    ASSISTANT  Cherry Bus (Maria Reyes)
+--   assistant2@palago.test   ASSISTANT  Cherry Bus (Nilo Cruz)
 --   admin@palago.test        ADMIN
+--
+-- Cherry Bus has two of each on purpose. Eight departures across three days
+-- cannot be crewed by one driver — the exclusion constraints in
+-- `20260915000031_schedules.sql` will not allow it — so whichever of them the
+-- allocator puts on a given trip needs to be able to sign in and scan at its
+-- door.
 --
 --   password: PalawanGo2026
 
@@ -38,7 +46,9 @@ insert into seed_users (email, full_name, phone) values
   ('operator@palago.test',  'Cherry Bus Ops',  '09181234567'),
   ('roro@palago.test',      'RoRo Bus Ops',    '09191234567'),
   ('driver@palago.test',    'Juan Santos',     '09171112222'),
+  ('driver2@palago.test',   'Rosa Delgado',    '09174445555'),
   ('assistant@palago.test', 'Maria Reyes',     '09173334444'),
+  ('assistant2@palago.test', 'Nilo Cruz',      '09173334455'),
   ('admin@palago.test',     'PalaGo Admin',    '09170000000');
 
 insert into auth.users (
@@ -105,11 +115,11 @@ where p.email = 'roro@palago.test';
 
 update public.profiles p
 set role = 'DRIVER', operator_id = (select id from public.operators where code = 'CHERRY')
-where p.email = 'driver@palago.test';
+where p.email in ('driver@palago.test', 'driver2@palago.test');
 
 update public.profiles p
 set role = 'ASSISTANT', operator_id = (select id from public.operators where code = 'CHERRY')
-where p.email = 'assistant@palago.test';
+where p.email in ('assistant@palago.test', 'assistant2@palago.test');
 
 update public.profiles p
 set emergency_contact_name = 'Maria Dela Cruz', emergency_contact_phone = '09177654321'
@@ -192,20 +202,39 @@ where (s.row_number - 1) * 4 + s.column_number <= b.capacity;
 -- Crew
 -- ---------------------------------------------------------------------------
 
-insert into public.drivers (operator_id, user_id, license_number, name, phone)
+insert into public.drivers (operator_id, user_id, license_number, name, phone, license_expiration_date)
 select
   (select id from public.operators where code = 'CHERRY'),
   (select id from auth.users where email = 'driver@palago.test'),
-  'DRV-001', 'Juan Santos', '+63 917 123 4567';
+  'DRV-001', 'Juan Santos', '+63 917 123 4567', current_date + 400;
 
-insert into public.drivers (operator_id, license_number, name, phone)
-select (select id from public.operators where code = 'RORO'), 'DRV-002', 'Pedro Ramos', '+63 917 222 3333';
+-- Cherry's second driver. One bus company cannot crew eight departures across
+-- three days with one driver — the exclusion constraints in
+-- `20260915000031_schedules.sql` will not allow it — and whoever the allocator
+-- below puts on a trip has to be able to sign in and scan at its door, so this
+-- one has a login too. RoRo's crew deliberately do not: a roster with people
+-- on it who never open the app is the normal case, and something has to
+-- exercise it.
+insert into public.drivers (operator_id, user_id, license_number, name, phone, license_expiration_date)
+select
+  (select id from public.operators where code = 'CHERRY'),
+  (select id from auth.users where email = 'driver2@palago.test'),
+  'DRV-003', 'Rosa Delgado', '+63 917 444 5555', current_date + 250;
+
+insert into public.drivers (operator_id, license_number, name, phone, license_expiration_date)
+select (select id from public.operators where code = 'RORO'), 'DRV-002', 'Pedro Ramos', '+63 917 222 3333', current_date + 500;
 
 insert into public.assistants (operator_id, user_id, name, phone)
 select
   (select id from public.operators where code = 'CHERRY'),
   (select id from auth.users where email = 'assistant@palago.test'),
   'Maria Reyes', '+63 905 987 6543';
+
+insert into public.assistants (operator_id, user_id, name, phone)
+select
+  (select id from public.operators where code = 'CHERRY'),
+  (select id from auth.users where email = 'assistant2@palago.test'),
+  'Nilo Cruz', '+63 905 333 4444';
 
 insert into public.assistants (operator_id, name, phone)
 select (select id from public.operators where code = 'RORO'), 'Ana Lim', '+63 905 111 2222';
@@ -311,16 +340,64 @@ insert into seed_extra_trips select 'LIVE', id from ins;
 -- them to the assignment status each trip's stage of the journey implies.
 -- ---------------------------------------------------------------------------
 
-insert into public.trip_assignments (trip_id, driver_id, assistant_id, status)
-select
-  t.id,
-  d.id,
-  a.id,
-  'ASSIGNED'
-from public.trips t
-join public.operators o on o.id = t.operator_id and o.code = 'CHERRY'
-join public.drivers d on d.operator_id = o.id and d.license_number = 'DRV-001'
-join public.assistants a on a.operator_id = o.id and a.name = 'Maria Reyes';
+-- Crew every Cherry departure with somebody who is actually free for it.
+--
+-- This used to put DRV-001 and Maria Reyes on all eight, which meant one driver
+-- on two coaches at once four times over. The exclusion constraints added in
+-- `20260915000031_schedules.sql` refuse that outright, and rightly — so the
+-- seed now allocates the way an operator would: take each departure in turn and
+-- give it the first crew member whose window is clear.
+--
+-- The two hand-built trips are ordered first so DRV-001 (driver@palago.test)
+-- and Maria Reyes (assistant@palago.test) end up on the finished trip and the
+-- one under way, which is what the tracking, boarding and crew suites read.
+do $crew$
+declare
+  v_trip record;
+  v_driver uuid;
+  v_assistant uuid;
+begin
+  for v_trip in
+    select t.id, t.blocked_range
+      from public.trips t
+      join public.operators o on o.id = t.operator_id and o.code = 'CHERRY'
+     order by (t.trip_number like '%-Z' or t.trip_number like '%-Y') desc,
+              t.departure_date, t.departure_time
+  loop
+    select d.id into v_driver
+      from public.drivers d
+      join public.operators o on o.id = d.operator_id and o.code = 'CHERRY'
+     where not exists (
+       select 1 from public.trip_assignments ta
+        where ta.driver_id = d.id
+          and ta.status in ('ASSIGNED', 'ACTIVE')
+          and ta.blocked_range && v_trip.blocked_range
+     )
+     order by d.license_number
+     limit 1;
+
+    select a.id into v_assistant
+      from public.assistants a
+      join public.operators o on o.id = a.operator_id and o.code = 'CHERRY'
+     where not exists (
+       select 1 from public.trip_assignments ta
+        where ta.assistant_id = a.id
+          and ta.status in ('ASSIGNED', 'ACTIVE')
+          and ta.blocked_range && v_trip.blocked_range
+     )
+     order by a.name
+     limit 1;
+
+    if v_driver is not null or v_assistant is not null then
+      insert into public.trip_assignments (trip_id, driver_id, assistant_id, status)
+      values (v_trip.id, v_driver, v_assistant, 'ASSIGNED');
+    end if;
+
+    v_driver := null;
+    v_assistant := null;
+  end loop;
+end
+$crew$;
 
 update public.trip_assignments
    set status = 'COMPLETED'

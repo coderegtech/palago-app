@@ -2,6 +2,7 @@ import { ArrowRight, Plus } from 'lucide-react-native';
 import { useState } from 'react';
 import { View } from 'react-native';
 
+import { ConfirmDialog } from '@/components/common/confirm-dialog';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,16 +14,31 @@ import { Screen } from '@/components/ui/screen';
 import { Select } from '@/components/ui/select';
 import { EmptyState, ErrorState, Loading } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
+import { OperatorStatus } from '@/constants/enums';
 import { AdminContentMaxWidth, Colors } from '@/constants/theme';
-import { useAdminOperators, useAdminRoutes, useAdminTerminals, useCreateRoute } from '@/hooks/use-admin';
+import {
+  useAdminOperators,
+  useAdminRoutes,
+  useAdminTerminals,
+  useCreateRoute,
+  useSetRouteStatus,
+  useUpdateRoute,
+} from '@/hooks/use-admin';
 import { AppError } from '@/lib/errors';
 import { useUIStore } from '@/stores/ui-store';
+import type { RouteRecord } from '@/services/admin-service';
 import type { UUID } from '@/types/models';
 
 export default function AdminRoutesScreen() {
   const routes = useAdminRoutes();
   const operators = useAdminOperators();
   const terminals = useAdminTerminals();
+  const update = useUpdateRoute();
+  const setStatus = useSetRouteStatus();
+
+  const [editing, setEditing] = useState<RouteRecord | null>(null);
+  const [retiring, setRetiring] = useState<RouteRecord | null>(null);
+  const [editDraft, setEditDraft] = useState({ duration: '', distance: '' });
   const create = useCreateRoute();
   const showToast = useUIStore((state) => state.showToast);
 
@@ -153,18 +169,155 @@ export default function AdminRoutesScreen() {
             {
               key: 'status',
               header: 'Status',
-              width: 96,
-              align: 'right',
+              width: 100,
               cell: (row) => (
                 <Badge
-                  label={row.status === 'ACTIVE' ? 'Active' : 'Inactive'}
-                  tone={row.status === 'ACTIVE' ? 'success' : 'neutral'}
+                  label={row.status === OperatorStatus.ACTIVE ? 'Active' : 'Inactive'}
+                  tone={row.status === OperatorStatus.ACTIVE ? 'success' : 'neutral'}
                 />
+              ),
+            },
+            {
+              key: 'actions',
+              header: 'Actions',
+              width: 200,
+              align: 'right',
+              cell: (row) => (
+                <View className="flex-row flex-wrap items-center justify-end gap-2">
+                  <Button
+                    label="Edit"
+                    size="sm"
+                    variant="outline"
+                    fullWidth={false}
+                    onPress={() => {
+                      setEditDraft({
+                        duration: String(row.durationMinutes),
+                        distance: row.distanceKm === null ? '' : String(row.distanceKm),
+                      });
+                      setEditing(row);
+                    }}
+                  />
+                  {row.status === OperatorStatus.ACTIVE ? (
+                    <Button
+                      label="Retire"
+                      size="sm"
+                      variant="danger"
+                      fullWidth={false}
+                      onPress={() => setRetiring(row)}
+                    />
+                  ) : (
+                    <Button
+                      label="Reinstate"
+                      size="sm"
+                      variant="outline"
+                      fullWidth={false}
+                      loading={setStatus.isPending}
+                      onPress={() =>
+                        void setStatus
+                          .mutateAsync({ routeId: row.id, status: OperatorStatus.ACTIVE })
+                          .then(() => showToast({ tone: 'success', title: 'Route reinstated' }))
+                          .catch((error) =>
+                            showToast({
+                              tone: 'danger',
+                              title: 'Could not reinstate it',
+                              message:
+                                error instanceof AppError ? error.message : 'Try again.',
+                            }),
+                          )
+                      }
+                    />
+                  )}
+                </View>
               ),
             },
           ]}
         />
       )}
+
+      <Modal
+        visible={editing !== null}
+        onClose={() => setEditing(null)}
+        title={`Edit ${editing?.originCode ?? ''} → ${editing?.destinationCode ?? ''}`}>
+        <View className="gap-4 pt-2">
+          <Input
+            label="Journey time (minutes)"
+            value={editDraft.duration}
+            onChangeText={(value) =>
+              setEditDraft((d) => ({ ...d, duration: value.replace(/\D/g, '') }))
+            }
+            keyboardType="number-pad"
+          />
+          <Input
+            label="Distance in km (optional)"
+            value={editDraft.distance}
+            onChangeText={(value) =>
+              setEditDraft((d) => ({ ...d, distance: value.replace(/[^\d.]/g, '') }))
+            }
+            keyboardType="decimal-pad"
+          />
+          <Text variant="caption" tone="muted">
+            Where the route goes is not editable. Re-pointing it would silently change every trip
+            and every ticket already sold on it — that is a new route, not an edit.
+          </Text>
+          <Text variant="caption" tone="muted">
+            Changing the journey time does not move departures already scheduled on it; edit those
+            from the schedule screen.
+          </Text>
+          <Button
+            label="Save"
+            disabled={editDraft.duration === '' || Number(editDraft.duration) <= 0}
+            loading={update.isPending}
+            onPress={() =>
+              editing &&
+              void update
+                .mutateAsync({
+                  routeId: editing.id,
+                  durationMinutes: Number(editDraft.duration),
+                  distanceKm: editDraft.distance === '' ? null : Number(editDraft.distance),
+                })
+                .then(() => {
+                  setEditing(null);
+                  showToast({ tone: 'success', title: 'Saved' });
+                })
+                .catch((error) =>
+                  showToast({
+                    tone: 'danger',
+                    title: 'Could not save',
+                    message: error instanceof AppError ? error.message : 'Try again.',
+                  }),
+                )
+            }
+          />
+          <Button label="Cancel" variant="ghost" onPress={() => setEditing(null)} />
+        </View>
+      </Modal>
+
+      <ConfirmDialog
+        visible={retiring !== null}
+        title="Retire this route?"
+        message={`No new departure can be scheduled on ${retiring?.originCode ?? ''} → ${retiring?.destinationCode ?? ''}, and its trips stop selling seats.`}
+        consequence="Nothing is deleted. Trips already scheduled on it keep their tickets and still run unless they are cancelled one by one."
+        confirmLabel="Retire route"
+        destructive
+        loading={setStatus.isPending}
+        onConfirm={() =>
+          retiring &&
+          void setStatus
+            .mutateAsync({ routeId: retiring.id, status: OperatorStatus.INACTIVE })
+            .then(() => {
+              setRetiring(null);
+              showToast({ tone: 'success', title: 'Route retired' });
+            })
+            .catch((error) =>
+              showToast({
+                tone: 'danger',
+                title: 'Could not retire it',
+                message: error instanceof AppError ? error.message : 'Try again.',
+              }),
+            )
+        }
+        onCancel={() => setRetiring(null)}
+      />
 
       <Modal visible={adding} onClose={reset} title="Add a route">
         <View className="gap-4 pt-2">

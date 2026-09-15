@@ -192,6 +192,8 @@ decided by the server and never accepted from the client. See [docs/security.md]
 - [brand.md](docs/brand.md)
 - [database.md](docs/database.md)
 - [deployment.md](docs/deployment.md) — the web build on Vercel, and what it does *not* deploy
+- [management.md](docs/management.md) — the admin → operator → crew hierarchy, the two staff
+  statuses, and how a bus is stopped from being in two places at once
 - [payment-flow.md](docs/payment-flow.md)
 - [phases.md](docs/phases.md) — the phased build process, gates and invariants
 - [qr-flow.md](docs/qr-flow.md)
