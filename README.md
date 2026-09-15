@@ -201,3 +201,5 @@ decided by the server and never accepted from the client. See [docs/security.md]
 - [security.md](docs/security.md)
 - [test-accounts.md](docs/test-accounts.md) — seeded sign-in credentials for local testing
 - [testing.md](docs/testing.md)
+- [walkthrough.md](docs/walkthrough.md) — the prototype screen by screen, as each of
+  the four roles sees it, with screenshots taken from the running app
