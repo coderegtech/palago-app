@@ -21,6 +21,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { loadVerifyEnv } from './_verify-env.mjs';
+import { makeInvoke } from './_verify-invoke.mjs';
 
 const { url: URL_, key: KEY } = loadVerifyEnv();
 const PASSWORD = 'PalawanGo2026';
@@ -47,18 +48,7 @@ function check(name, ok, detail = '') {
   }
 }
 
-async function invoke(fn, body, accessToken) {
-  const res = await fetch(`${URL_}/functions/v1/${fn}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: KEY,
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-  return { status: res.status, body: await res.json().catch(() => null) };
-}
+const invoke = makeInvoke(URL_, KEY);
 
 // Somewhere on the Puerto Princesa–El Nido road, roughly.
 const PPS = { latitude: 9.7392, longitude: 118.7353 };

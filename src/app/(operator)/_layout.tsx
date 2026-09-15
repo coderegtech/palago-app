@@ -67,6 +67,9 @@ export default function OperatorLayout() {
         />
 
         {/* Pushed from within the tabs rather than shown in the bar. */}
+        {/* Reached from the dashboard rather than the bar: five tabs is
+            already the most that fits legibly on a phone. */}
+        <Tabs.Screen name="crew" options={{ href: null }} />
         <Tabs.Screen name="trips" options={{ href: null }} />
         <Tabs.Screen name="buses" options={{ href: null }} />
         <Tabs.Screen name="manifest" options={{ href: null }} />

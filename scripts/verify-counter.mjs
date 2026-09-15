@@ -26,6 +26,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { loadVerifyEnv } from './_verify-env.mjs';
+import { makeInvoke } from './_verify-invoke.mjs';
 
 const { url: URL_, key: KEY } = loadVerifyEnv();
 const PASSWORD = 'PalawanGo2026';
@@ -52,18 +53,7 @@ function check(name, ok, detail = '') {
   }
 }
 
-async function invoke(fn, body, accessToken) {
-  const response = await fetch(`${URL_}/functions/v1/${fn}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: KEY,
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-  return { status: response.status, body: await response.json().catch(() => null) };
-}
+const invoke = makeInvoke(URL_, KEY);
 
 const roro = await signIn('roro@palago.test');
 const cherry = await signIn('operator@palago.test');

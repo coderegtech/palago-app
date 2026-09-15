@@ -10,5 +10,6 @@ export * from './modal';
 export * from './screen';
 export * from './select';
 export * from './states';
+export * from './table-toolbar';
 export * from './text';
 export * from './toast';

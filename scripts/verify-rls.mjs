@@ -110,19 +110,32 @@ console.log('\nOperator isolation — Cherry Bus vs RoRo Bus');
 {
   const cherryDrivers = (await cherry.from('drivers').select('name, operator_id')).data ?? [];
   const roroDrivers = (await roro.from('drivers').select('name, operator_id')).data ?? [];
-  check('Cherry sees only its own drivers', cherryDrivers.length === 1, `saw ${cherryDrivers.length}`);
-  check('RoRo sees only its own drivers', roroDrivers.length === 1, `saw ${roroDrivers.length}`);
+
+  // Asserted as "every row I can see is mine", not as a count. A count breaks
+  // the next time the seed gains a driver, which says nothing about the policy.
+  const cherryOperatorId = cherryDrivers[0]?.operator_id;
+  const roroOperatorId = roroDrivers[0]?.operator_id;
+
+  check(
+    'Cherry sees only its own drivers',
+    cherryDrivers.length > 0 && cherryDrivers.every((d) => d.operator_id === cherryOperatorId),
+    `saw ${cherryDrivers.length}`,
+  );
+  check(
+    'RoRo sees only its own drivers',
+    roroDrivers.length > 0 && roroDrivers.every((d) => d.operator_id === roroOperatorId),
+    `saw ${roroDrivers.length}`,
+  );
   check(
     'the two operators see different drivers',
-    cherryDrivers[0]?.name !== roroDrivers[0]?.name,
-    'both saw the same row',
+    cherryOperatorId !== roroOperatorId &&
+      !cherryDrivers.some((d) => roroDrivers.some((r) => r.name === d.name)),
+    'the two lists overlap',
   );
 
   // Reference data is readable by everyone signed in, so "the first bus RoRo
-  // can see" is not necessarily RoRo's. Scope by operator explicitly, or the
-  // test silently checks the wrong row.
-  const cherryOperatorId = cherryDrivers[0].operator_id;
-  const roroOperatorId = roroDrivers[0].operator_id;
+  // can see" is not necessarily RoRo's — both ids above are scoped explicitly,
+  // or the test silently checks the wrong row.
 
   const roroBus = (
     await roro.from('buses').select('id, bus_number').eq('operator_id', roroOperatorId).limit(1)
@@ -141,13 +154,41 @@ console.log('\nOperator isolation — Cherry Bus vs RoRo Bus');
   const ownBus = (
     await cherry.from('buses').select('id').eq('operator_id', cherryOperatorId).limit(1)
   ).data[0];
-  const rename = await cherry
+  // Direct writes to reference data were withdrawn in
+  // `20260915000032_bookable_trips.sql`: an edit that leaves no audit trail
+  // cannot answer "who took that coach off the road".
+  const directRename = await cherry
     .from('buses')
     .update({ name: 'Cherry Bus 001 (renamed)' })
     .eq('id', ownBus.id)
     .select();
-  check('Cherry can edit its own bus', !rename.error && rename.data.length === 1, rename.error?.message);
-  await cherry.from('buses').update({ name: 'Cherry Bus 001' }).eq('id', ownBus.id);
+  check(
+    'nobody edits a bus by writing the table',
+    directRename.error !== null || (directRename.data ?? []).length === 0,
+    JSON.stringify(directRename.data),
+  );
+
+  const busRow = (
+    await cherry.from('buses').select('bus_number, plate_number, name').eq('id', ownBus.id).single()
+  ).data;
+  const rename = await cherry.rpc('update_bus', {
+    p_bus_id: ownBus.id,
+    p_bus_number: busRow.bus_number,
+    p_plate_number: busRow.plate_number,
+    p_name: 'Cherry Bus 001 (renamed)',
+  });
+  const renamed = (await cherry.from('buses').select('name').eq('id', ownBus.id).single()).data;
+  check(
+    'Cherry can edit its own bus through update_bus',
+    !rename.error && renamed.name === 'Cherry Bus 001 (renamed)',
+    rename.error?.message ?? renamed.name,
+  );
+  await cherry.rpc('update_bus', {
+    p_bus_id: ownBus.id,
+    p_bus_number: busRow.bus_number,
+    p_plate_number: busRow.plate_number,
+    p_name: busRow.name,
+  });
 
   const roroTrip = (
     await roro.from('trips').select('id').eq('operator_id', roroOperatorId).limit(1)
@@ -185,8 +226,12 @@ console.log('\nDriver');
   const assignments = (await driver.from('trip_assignments').select('id')).data ?? [];
   check('driver sees their own assignments', assignments.length > 0, `saw ${assignments.length}`);
 
-  const own = (await driver.from('drivers').select('name')).data ?? [];
-  check('driver sees their own crew record', own.length === 1, `saw ${own.length}`);
+  const own = (await driver.from('drivers').select('name, license_number')).data ?? [];
+  check(
+    'driver sees their own crew record',
+    own.some((d) => d.license_number === 'DRV-001'),
+    `saw ${own.map((d) => d.license_number).join(', ')}`,
+  );
 }
 
 console.log('\nAdmin');
@@ -207,8 +252,14 @@ console.log('\nAdmin');
   const missing = expected.filter((email) => !seen.has(email));
   check('admin reads every seeded profile', missing.length === 0, `missing ${missing.join(', ')}`);
 
-  const drivers = (await admin.from('drivers').select('id')).data ?? [];
-  check('admin reads every driver', drivers.length === 2, `saw ${drivers.length}`);
+  // Named, not counted: a seed that gains a driver must not fail a policy test.
+  const drivers = (await admin.from('drivers').select('license_number')).data ?? [];
+  const licences = new Set(drivers.map((d) => d.license_number));
+  check(
+    'admin reads every driver, across operators',
+    ['DRV-001', 'DRV-002', 'DRV-003'].every((l) => licences.has(l)),
+    [...licences].join(', '),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -274,28 +325,85 @@ console.log('\nCrew — must not manage the operator');
   check('driver cannot edit the operator record',
     (await admin.from('operators').select('name').eq('id', op.id).single()).data.name === op.name);
 
-  // A complete row, so the only thing that can refuse it is the policy. (An
-  // earlier version omitted license_number and "passed" on a NOT NULL error.)
-  await driver.from('drivers').insert({
-    operator_id: cherryTrip.operator_id,
-    name: 'Hired by driver',
-    license_number: 'D00-00-000000',
+  // Through the function crew creation actually moved into. A direct INSERT is
+  // now refused for everybody, so testing that would prove nothing about the
+  // driver specifically. (An earlier version of this check omitted
+  // license_number and "passed" on a NOT NULL error — see AGENTS.md.)
+  await driver.rpc('create_crew_member', {
+    p_kind: 'DRIVER',
+    p_name: 'Hired by driver',
+    p_license_number: 'D00-00-000000',
+    p_operator_id: cherryTrip.operator_id,
   });
   const hired = (await admin.from('drivers').select('id').eq('name', 'Hired by driver')).data ?? [];
   check('driver cannot add a driver', hired.length === 0, `${hired.length} row(s) created`);
-  if (hired.length) await admin.from('drivers').delete().eq('name', 'Hired by driver');
 
-  // Positive controls: an operator still manages its own fleet and crew.
-  const repriced = await cherry.from('trips').update({ fare: cherryTrip.fare + 100 }).eq('id', cherryTrip.id).select('fare');
-  check('operator can still change its own fare', repriced.data?.[0]?.fare === cherryTrip.fare + 100,
-    repriced.error?.message);
-  await cherry.from('trips').update({ fare: cherryTrip.fare }).eq('id', cherryTrip.id);
+  // Positive controls: an operator still manages its own fleet and crew —
+  // through `update_trip` and `set_crew_availability`, since the direct writes
+  // those replaced are gone.
+  const tripRow = (
+    await cherry
+      .from('trips')
+      .select('route_id, bus_id, trip_number, departure_date, departure_time, arrival_time, fare')
+      .eq('id', cherryTrip.id)
+      .single()
+  ).data;
 
-  const crewDriver = (await admin.from('drivers').select('id, status').eq('operator_id', cherryTrip.operator_id).limit(1).single()).data;
-  const suspended = await cherry.from('drivers').update({ status: 'SUSPENDED' }).eq('id', crewDriver.id).select('status');
-  check('operator can still suspend its own driver', suspended.data?.[0]?.status === 'SUSPENDED',
-    suspended.error?.message);
-  await cherry.from('drivers').update({ status: crewDriver.status }).eq('id', crewDriver.id);
+  const repriced = await cherry.rpc('update_trip', {
+    p_trip_id: cherryTrip.id,
+    p_route_id: tripRow.route_id,
+    p_bus_id: tripRow.bus_id,
+    p_trip_number: tripRow.trip_number,
+    p_departure_date: tripRow.departure_date,
+    p_departure_time: tripRow.departure_time,
+    p_arrival_time: tripRow.arrival_time,
+    p_fare: tripRow.fare + 100,
+  });
+  const afterFare = (await cherry.from('trips').select('fare').eq('id', cherryTrip.id).single()).data;
+  check(
+    'operator can still change its own fare',
+    afterFare.fare === tripRow.fare + 100,
+    repriced.error?.message ?? String(afterFare.fare),
+  );
+  await cherry.rpc('update_trip', {
+    p_trip_id: cherryTrip.id,
+    p_route_id: tripRow.route_id,
+    p_bus_id: tripRow.bus_id,
+    p_trip_number: tripRow.trip_number,
+    p_departure_date: tripRow.departure_date,
+    p_departure_time: tripRow.departure_time,
+    p_arrival_time: tripRow.arrival_time,
+    p_fare: tripRow.fare,
+  });
+
+  const crewDriver = (
+    await admin
+      .from('drivers')
+      .select('id, availability_status')
+      .eq('operator_id', cherryTrip.operator_id)
+      .order('license_number')
+      .limit(1)
+      .single()
+  ).data;
+  const rested = await cherry.rpc('set_crew_availability', {
+    p_kind: 'DRIVER',
+    p_crew_id: crewDriver.id,
+    p_status: 'UNAVAILABLE',
+    p_reason: 'Rest day (verify-rls)',
+  });
+  const afterRest = (
+    await admin.from('drivers').select('availability_status').eq('id', crewDriver.id).single()
+  ).data;
+  check(
+    'operator can still set its own driver unavailable',
+    afterRest.availability_status === 'UNAVAILABLE',
+    rested.error?.message ?? afterRest.availability_status,
+  );
+  await cherry.rpc('set_crew_availability', {
+    p_kind: 'DRIVER',
+    p_crew_id: crewDriver.id,
+    p_status: crewDriver.availability_status,
+  });
 
   // Status moves only through set_trip_boarding / start_trip / end_trip.
   for (const [who, db] of [['operator', cherry], ['admin', admin]]) {

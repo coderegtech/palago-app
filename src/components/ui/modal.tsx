@@ -1,4 +1,4 @@
-import { Modal as RNModal, Pressable, View } from 'react-native';
+import { Modal as RNModal, Pressable, ScrollView, View } from 'react-native';
 import { X } from 'lucide-react-native';
 
 import { IconButton } from '@/components/ui/icon-button';
@@ -16,7 +16,14 @@ export interface ModalProps {
   className?: string;
 }
 
-/** Bottom sheet. Used for pickers and confirmations alike. */
+/**
+ * Bottom sheet. Used for pickers, forms and confirmations alike.
+ *
+ * The body scrolls. The sheet is capped at 80% of the screen, and a form with
+ * more than a handful of fields is taller than that on a phone — the schedule
+ * form put its Save button below the fold with no way to reach it, which makes
+ * the whole sheet useless rather than merely cramped.
+ */
 export function Modal({
   visible,
   onClose,
@@ -52,7 +59,19 @@ export function Modal({
               </IconButton>
             </View>
           ) : null}
-          {children}
+
+          {/*
+            `bounces={false}` so a short sheet does not rubber-band as though
+            there were more below it, and the keyboard dismisses on drag rather
+            than covering the field somebody is scrolling towards.
+          */}
+          <ScrollView
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            showsVerticalScrollIndicator={false}>
+            {children}
+          </ScrollView>
         </View>
       </View>
     </RNModal>

@@ -5,16 +5,23 @@
  * views are scoped through `current_operator_id()` and an admin has no
  * operator, so they would correctly return nothing.
  *
- * Creating a bus goes through `create_bus`, because the coach and its seat
- * layout must arrive together: a bus with no `bus_seats` rows looks sellable
- * but cannot be booked. Operators, terminals and routes are ordinary inserts —
- * standalone rows with no cross-row invariant, guarded by the Phase 3a policies
- * that already end `or public.is_admin()`. RLS is the check, here as everywhere.
+ * Every write here is a function call, not a table write. Reference data used
+ * to be inserted straight through RLS, which was fine while the only action was
+ * "add one"; it is not fine now that there is an edit form and a deactivate
+ * button, because a change with no audit trail cannot answer "who took that
+ * coach off the road, and when". `20260915000032_bookable_trips.sql` withdrew
+ * the client INSERT, UPDATE and DELETE on all four tables.
+ *
+ * There is no delete. An operator, a terminal, a route and a coach are all
+ * referenced by trips, bookings, payments and tickets, so the console's
+ * "remove" is deactivation: the row stays, the history stays, and nothing new
+ * can be built on it.
  */
 
-import type { BusType, OperatorStatus } from '@/constants/enums';
+import type { AccountStatus, BusType, OperatorStatus, UserRole } from '@/constants/enums';
 import { fromRpcError, toAppError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
+import { operatorService } from '@/services/operator-service';
 import type { Centavos, ISODate, UUID } from '@/types/models';
 
 export interface AdminOperatorStat {
@@ -113,6 +120,18 @@ export interface BusRecord {
   status: OperatorStatus;
 }
 
+/** A staff login attached to an operator, as an admin sees it. */
+export interface StaffAccount {
+  id: UUID;
+  fullName: string;
+  email: string;
+  phone: string | null;
+  role: UserRole;
+  accountStatus: AccountStatus;
+  mustChangePassword: boolean;
+  createdAt: string;
+}
+
 export interface CreateOperatorInput {
   name: string;
   code: string;
@@ -199,20 +218,80 @@ export const adminService = {
   },
 
   async createOperator(input: CreateOperatorInput): Promise<UUID> {
+    const { data, error } = await supabase.rpc('create_operator', {
+      p_name: input.name.trim(),
+      p_code: input.code.trim().toUpperCase(),
+      p_description: input.description?.trim() || undefined,
+      p_contact_phone: input.contactPhone?.trim() || undefined,
+      p_contact_email: input.contactEmail?.trim() || undefined,
+    });
+
+    if (error) throw fromRpcError(error);
+    return (data as unknown as { id: UUID }).id;
+  },
+
+  /** The code is identity and is not editable — it is what routes, buses and staff resolve through. */
+  async updateOperator(
+    operatorId: UUID,
+    input: Omit<CreateOperatorInput, 'code'>,
+  ): Promise<void> {
+    const { error } = await supabase.rpc('update_operator', {
+      p_operator_id: operatorId,
+      p_name: input.name.trim(),
+      p_description: input.description?.trim() || undefined,
+      p_contact_phone: input.contactPhone?.trim() || undefined,
+      p_contact_email: input.contactEmail?.trim() || undefined,
+    });
+    if (error) throw fromRpcError(error);
+  },
+
+  /**
+   * Stops a company's trips being sold. It does NOT lock its staff out — that
+   * is a separate action on each account, so the people who have to wind the
+   * schedule down can still get in.
+   */
+  async setOperatorStatus(
+    operatorId: UUID,
+    status: OperatorStatus,
+    reason?: string,
+  ): Promise<{ upcomingTrips: number }> {
+    const { data, error } = await supabase.rpc('set_operator_status', {
+      p_operator_id: operatorId,
+      p_status: status,
+      p_reason: reason?.trim() || undefined,
+    });
+    if (error) throw fromRpcError(error);
+    const result = data as unknown as { upcomingTrips?: number };
+    return { upcomingTrips: result.upcomingTrips ?? 0 };
+  },
+
+  /**
+   * Staff accounts belonging to one operator.
+   *
+   * Straight off `profiles`, which only an admin may read beyond their own row.
+   * Crew are also in `operator_crew`, but that is scoped to the caller's own
+   * operator; this is the platform-wide view an admin needs to see who can sign
+   * in for a company they do not belong to.
+   */
+  async listStaff(operatorId: UUID): Promise<StaffAccount[]> {
     const { data, error } = await supabase
-      .from('operators')
-      .insert({
-        name: input.name.trim(),
-        code: input.code.trim().toUpperCase(),
-        description: input.description?.trim() || null,
-        contact_phone: input.contactPhone?.trim() || null,
-        contact_email: input.contactEmail?.trim() || null,
-      })
-      .select('id')
-      .single();
+      .from('profiles')
+      .select('id, full_name, email, phone, role, account_status, must_change_password, created_at')
+      .eq('operator_id', operatorId)
+      .order('role')
+      .order('full_name');
 
     if (error) throw toAppError(error);
-    return data.id;
+    return data.map((row) => ({
+      id: row.id,
+      fullName: row.full_name,
+      email: row.email,
+      phone: row.phone,
+      role: row.role,
+      accountStatus: row.account_status,
+      mustChangePassword: row.must_change_password,
+      createdAt: row.created_at,
+    }));
   },
 
   async listTerminals(): Promise<TerminalRecord[]> {
@@ -235,22 +314,42 @@ export const adminService = {
   },
 
   async createTerminal(input: CreateTerminalInput): Promise<UUID> {
-    const { data, error } = await supabase
-      .from('terminals')
-      .insert({
-        name: input.name.trim(),
-        code: input.code.trim().toUpperCase(),
-        city: input.city.trim(),
-        province: input.province?.trim() || 'Palawan',
-        latitude: input.latitude,
-        longitude: input.longitude,
-        address: input.address?.trim() || null,
-      })
-      .select('id')
-      .single();
+    const { data, error } = await supabase.rpc('create_terminal', {
+      p_name: input.name.trim(),
+      p_code: input.code.trim().toUpperCase(),
+      p_city: input.city.trim(),
+      p_latitude: input.latitude,
+      p_longitude: input.longitude,
+      p_province: input.province?.trim() || undefined,
+      p_address: input.address?.trim() || undefined,
+    });
 
-    if (error) throw toAppError(error);
-    return data.id;
+    if (error) throw fromRpcError(error);
+    return (data as unknown as { id: UUID }).id;
+  },
+
+  async updateTerminal(
+    terminalId: UUID,
+    input: Omit<CreateTerminalInput, 'code'>,
+  ): Promise<void> {
+    const { error } = await supabase.rpc('update_terminal', {
+      p_terminal_id: terminalId,
+      p_name: input.name.trim(),
+      p_city: input.city.trim(),
+      p_latitude: input.latitude,
+      p_longitude: input.longitude,
+      p_province: input.province?.trim() || undefined,
+      p_address: input.address?.trim() || undefined,
+    });
+    if (error) throw fromRpcError(error);
+  },
+
+  async setTerminalStatus(terminalId: UUID, status: OperatorStatus): Promise<void> {
+    const { error } = await supabase.rpc('set_terminal_status', {
+      p_terminal_id: terminalId,
+      p_status: status,
+    });
+    if (error) throw fromRpcError(error);
   },
 
   async listRoutes(): Promise<RouteRecord[]> {
@@ -281,20 +380,41 @@ export const adminService = {
   },
 
   async createRoute(input: CreateRouteInput): Promise<UUID> {
-    const { data, error } = await supabase
-      .from('routes')
-      .insert({
-        operator_id: input.operatorId,
-        origin_terminal_id: input.originTerminalId,
-        destination_terminal_id: input.destinationTerminalId,
-        duration_minutes: input.durationMinutes,
-        distance_km: input.distanceKm ?? null,
-      })
-      .select('id')
-      .single();
+    const { data, error } = await supabase.rpc('create_route', {
+      p_operator_id: input.operatorId,
+      p_origin_terminal_id: input.originTerminalId,
+      p_destination_terminal_id: input.destinationTerminalId,
+      p_duration_minutes: input.durationMinutes,
+      p_distance_km: input.distanceKm ?? undefined,
+    });
 
-    if (error) throw toAppError(error);
-    return data.id;
+    if (error) throw fromRpcError(error);
+    return (data as unknown as { id: UUID }).id;
+  },
+
+  /**
+   * Only the journey time and distance. Where a route goes is not editable:
+   * re-pointing it would silently change every trip and every ticket already
+   * sold on it. That is a new route, not an edit.
+   */
+  async updateRoute(
+    routeId: UUID,
+    input: { durationMinutes: number; distanceKm?: number | null },
+  ): Promise<void> {
+    const { error } = await supabase.rpc('update_route', {
+      p_route_id: routeId,
+      p_duration_minutes: input.durationMinutes,
+      p_distance_km: input.distanceKm ?? undefined,
+    });
+    if (error) throw fromRpcError(error);
+  },
+
+  async setRouteStatus(routeId: UUID, status: OperatorStatus): Promise<void> {
+    const { error } = await supabase.rpc('set_route_status', {
+      p_route_id: routeId,
+      p_status: status,
+    });
+    if (error) throw fromRpcError(error);
   },
 
   async listBuses(): Promise<BusRecord[]> {
@@ -320,19 +440,31 @@ export const adminService = {
   /**
    * Creates the coach and its seat layout in one transaction. The layout is
    * generated from `capacity` server-side, so the two cannot disagree.
+   *
+   * The same call an operator makes for their own fleet — `create_bus` decides
+   * whose it is from `p_operator_id` and refuses a company that is not yours —
+   * so there is one implementation, in `operator-service`.
    */
-  async createBus(input: CreateBusInput): Promise<{ id: UUID; seats: number }> {
-    const { data, error } = await supabase.rpc('create_bus', {
-      p_operator_id: input.operatorId,
-      p_plate_number: input.plateNumber,
-      p_bus_number: input.busNumber,
-      p_capacity: input.capacity,
-      p_bus_type: input.busType,
-      p_name: input.name ?? undefined,
-    });
+  createBus(input: CreateBusInput): Promise<{ id: UUID; seats: number }> {
+    return operatorService.createBus(input);
+  },
 
-    if (error) throw fromRpcError(error);
-    const result = data as unknown as { id: UUID; seats: number };
-    return { id: result.id, seats: result.seats };
+  updateBus(input: {
+    busId: UUID;
+    busNumber: string;
+    plateNumber: string;
+    name?: string | null;
+    /** Moving a coach between companies is an admin action. */
+    operatorId?: UUID;
+  }): Promise<void> {
+    return operatorService.updateBus(input);
+  },
+
+  setBusStatus(
+    busId: UUID,
+    status: OperatorStatus,
+    reason?: string,
+  ): Promise<{ upcomingTrips: number }> {
+    return operatorService.setBusStatus(busId, status, reason);
   },
 };

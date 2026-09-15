@@ -86,3 +86,25 @@ export function countdownUntil(isoTimestamp: string): string {
   const minutes = Math.floor(seconds / 60);
   return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
 }
+
+/**
+ * How long ago something happened, in words.
+ *
+ * Deliberately coarse: a feed reads better as "2h ago" than "1 hour 47 minutes
+ * ago", and anything older than a week is better as a date than a count of
+ * days. A future timestamp reads as "just now" rather than a negative age —
+ * clock skew between a phone and the server should not produce "in -3m".
+ */
+export function timeAgo(isoTimestamp: string, now: Date = new Date()): string {
+  const seconds = Math.floor((now.getTime() - new Date(isoTimestamp).getTime()) / 1000);
+
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+
+  return formatDateShort(isoTimestamp.slice(0, 10));
+}

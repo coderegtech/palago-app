@@ -22,6 +22,7 @@ import { Text } from '@/components/ui/text';
 import { BookingStatus } from '@/constants/enums';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
+import { useNotificationSubscription, useUnreadCount } from '@/hooks/use-notifications';
 import { useBookings, useOperators } from '@/hooks/use-trips';
 import { useWallet } from '@/hooks/use-wallet';
 import { useLoyalty } from '@/hooks/use-loyalty';
@@ -129,6 +130,13 @@ export default function HomeScreen() {
   const bookings = useBookings();
   const wallet = useWallet();
   const loyalty = useLoyalty();
+  const unreadNotifications = useUnreadCount();
+
+  // So the bell changes when something happens while this screen is open —
+  // a payment confirmed on the public web page, for instance.
+  useNotificationSubscription();
+
+  const unread = unreadNotifications.data ?? 0;
 
   const upcoming = (bookings.data ?? [])
     .filter((booking) => UPCOMING_STATUSES.includes(booking.status))
@@ -144,12 +152,27 @@ export default function HomeScreen() {
       <ScrollView contentContainerClassName="px-4 pb-8 gap-4" showsVerticalScrollIndicator={false}>
         <View className="flex-row items-center justify-between pt-2">
           <PalaGoLogo size="md" />
-          <IconButton
-            accessibilityLabel="Notifications"
-            variant="soft"
-            onPress={() => router.push('/notifications')}>
-            <Bell size={18} color={Colors.primary} />
-          </IconButton>
+          <View>
+            <IconButton
+              accessibilityLabel={
+                unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'
+              }
+              variant="soft"
+              onPress={() => router.push('/notifications')}>
+              <Bell size={18} color={Colors.primary} />
+            </IconButton>
+            {/* The count is also in the label above, so the badge is not the
+                only way to know there is something waiting. */}
+            {unread > 0 ? (
+              <View
+                pointerEvents="none"
+                className="absolute -right-1 -top-1 h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1">
+                <Text variant="caption" tone="inverse" className="text-[10px] font-semibold">
+                  {unread > 9 ? '9+' : unread}
+                </Text>
+              </View>
+            ) : null}
+          </View>
         </View>
 
         <View className="gap-0.5">

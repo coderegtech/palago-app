@@ -16,6 +16,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { loadVerifyEnv } from './_verify-env.mjs';
+import { makeInvoke } from './_verify-invoke.mjs';
 
 const { url: URL_, key: KEY } = loadVerifyEnv();
 const PASSWORD = 'PalawanGo2026';
@@ -42,18 +43,7 @@ function check(name, ok, detail = '') {
   }
 }
 
-async function invoke(fn, body, accessToken) {
-  const response = await fetch(`${URL_}/functions/v1/${fn}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: KEY,
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-  return { status: response.status, body: await response.json().catch(() => null) };
-}
+const invoke = makeInvoke(URL_, KEY);
 
 const passenger = await signIn('passenger@palago.test');
 const cherry = await signIn('operator@palago.test');
@@ -331,66 +321,88 @@ console.log('\nCrew management');
   const cherryOperatorId = cherryProfile.operator_id;
   const roroOperatorId = roroProfile.operator_id;
 
-  const added = await cherry.supabase
-    .from('drivers')
-    .insert({
-      operator_id: cherryOperatorId,
-      name: 'Test Driver',
-      license_number: `DRV-T${Date.now() % 100000}`,
-      phone: '09170000001',
-    })
-    .select();
+  // Crew are written through `create_crew_member` / `update_crew_member` /
+  // `set_crew_availability` now, not by writing the table: creating a driver
+  // has a second half (an auth account), availability carries a reason, and
+  // every change belongs in the audit trail.
+  const added = await cherry.supabase.rpc('create_crew_member', {
+    p_kind: 'DRIVER',
+    p_name: 'Test Driver',
+    p_license_number: `DRV-T${Date.now() % 100000}`,
+    p_phone: '09170000001',
+  });
   check('an operator can add its own driver', !added.error, added.error?.message);
 
+  const directAdd = await cherry.supabase.from('drivers').insert({
+    operator_id: cherryOperatorId,
+    name: 'Written Straight To The Table',
+    license_number: `DRV-D${Date.now() % 100000}`,
+  });
+  check('but not by writing the table', Boolean(directAdd.error), 'the insert succeeded');
+
   // The write that must fail: crew under someone else's company.
-  const crossAdd = await cherry.supabase.from('drivers').insert({
-    operator_id: roroOperatorId,
-    name: 'Planted Driver',
-    license_number: `DRV-X${Date.now() % 100000}`,
+  const crossAdd = await cherry.supabase.rpc('create_crew_member', {
+    p_kind: 'DRIVER',
+    p_name: 'Planted Driver',
+    p_license_number: `DRV-X${Date.now() % 100000}`,
+    p_operator_id: roroOperatorId,
   });
   check(
     "an operator cannot add a driver to a rival's roster",
-    Boolean(crossAdd.error),
-    'the insert succeeded',
+    crossAdd.error?.message === 'FORBIDDEN',
+    crossAdd.error?.message ?? 'it succeeded',
   );
 
   const roroDriver = (
     await roro.supabase.from('drivers').select('id').eq('operator_id', roroOperatorId).limit(1)
   ).data[0];
-  const crossEdit = await cherry.supabase
-    .from('drivers')
-    .update({ status: 'SUSPENDED' })
-    .eq('id', roroDriver.id)
-    .select();
-  check(
-    "an operator cannot suspend a rival's driver",
-    Boolean(crossEdit.error) || crossEdit.data?.length === 0,
-    'the update was applied',
-  );
-
-  const own = (
-    await cherry.supabase.from('drivers').select('id, status').eq('name', 'Test Driver').limit(1)
-  ).data[0];
-  const suspend = await cherry.supabase
-    .from('drivers')
-    .update({ status: 'SUSPENDED' })
-    .eq('id', own.id)
-    .select();
-  check(
-    'an operator can change its own driver status',
-    !suspend.error && suspend.data?.[0]?.status === 'SUSPENDED',
-    suspend.error?.message,
-  );
-
-  // Clean up so re-runs do not accumulate crew.
-  await cherry.supabase.from('drivers').delete().eq('id', own.id);
-
-  const paxAdd = await passenger.supabase.from('drivers').insert({
-    operator_id: cherryOperatorId,
-    name: 'Passenger Driver',
-    license_number: `DRV-P${Date.now() % 100000}`,
+  const crossEdit = await cherry.supabase.rpc('set_crew_availability', {
+    p_kind: 'DRIVER',
+    p_crew_id: roroDriver.id,
+    p_status: 'UNAVAILABLE',
   });
-  check('a passenger cannot add crew at all', Boolean(paxAdd.error), 'the insert succeeded');
+  check(
+    "an operator cannot make a rival's driver unavailable",
+    crossEdit.error?.message === 'FORBIDDEN',
+    crossEdit.error?.message ?? 'the change was applied',
+  );
+
+  const ownId = added.data?.id;
+  const rested = await cherry.supabase.rpc('set_crew_availability', {
+    p_kind: 'DRIVER',
+    p_crew_id: ownId,
+    p_status: 'UNAVAILABLE',
+    p_reason: 'Rest day',
+  });
+  const { data: ownAfter } = await cherry.supabase
+    .from('operator_crew')
+    .select('availability_status, account_status')
+    .eq('id', ownId)
+    .single();
+  check(
+    "an operator can change its own driver's availability",
+    !rested.error && ownAfter.availability_status === 'UNAVAILABLE',
+    rested.error?.message ?? ownAfter.availability_status,
+  );
+  // Availability is not account access: this one has no login at all, so there
+  // is no account status to have changed.
+  check('without touching account access', ownAfter.account_status === null, ownAfter.account_status);
+
+  // No cleanup delete: `drivers` has no client DELETE path any more, and a
+  // crew record is history once anything references it. Re-runs simply add a
+  // differently-numbered Test Driver, which nothing counts.
+
+  const paxAdd = await passenger.supabase.rpc('create_crew_member', {
+    p_kind: 'DRIVER',
+    p_name: 'Passenger Driver',
+    p_license_number: `DRV-P${Date.now() % 100000}`,
+    p_operator_id: cherryOperatorId,
+  });
+  check(
+    'a passenger cannot add crew at all',
+    paxAdd.error?.message === 'FORBIDDEN',
+    paxAdd.error?.message ?? 'it succeeded',
+  );
 }
 
 await releaseAllHolds();

@@ -2,6 +2,7 @@ import { Plus } from 'lucide-react-native';
 import { useState } from 'react';
 import { View } from 'react-native';
 
+import { ConfirmDialog } from '@/components/common/confirm-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
@@ -11,9 +12,16 @@ import { Modal } from '@/components/ui/modal';
 import { Screen } from '@/components/ui/screen';
 import { EmptyState, ErrorState, Loading } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
+import { OperatorStatus } from '@/constants/enums';
 import { AdminContentMaxWidth, Colors } from '@/constants/theme';
-import { useAdminTerminals, useCreateTerminal } from '@/hooks/use-admin';
+import {
+  useAdminTerminals,
+  useCreateTerminal,
+  useSetTerminalStatus,
+  useUpdateTerminal,
+} from '@/hooks/use-admin';
 import { AppError } from '@/lib/errors';
+import type { TerminalRecord } from '@/services/admin-service';
 import { useUIStore } from '@/stores/ui-store';
 
 /** Accepts a decimal degree within range, else null. */
@@ -27,6 +35,13 @@ export default function AdminTerminalsScreen() {
   const terminals = useAdminTerminals();
   const create = useCreateTerminal();
   const showToast = useUIStore((state) => state.showToast);
+
+  const update = useUpdateTerminal();
+  const setStatus = useSetTerminalStatus();
+
+  const [editing, setEditing] = useState<TerminalRecord | null>(null);
+  const [closing, setClosing] = useState<TerminalRecord | null>(null);
+  const [editDraft, setEditDraft] = useState({ name: '', city: '', latitude: '', longitude: '' });
 
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
@@ -135,18 +150,168 @@ export default function AdminTerminalsScreen() {
             {
               key: 'status',
               header: 'Status',
-              width: 96,
-              align: 'right',
+              width: 100,
               cell: (row) => (
                 <Badge
-                  label={row.status === 'ACTIVE' ? 'Active' : 'Inactive'}
-                  tone={row.status === 'ACTIVE' ? 'success' : 'neutral'}
+                  label={row.status === OperatorStatus.ACTIVE ? 'Open' : 'Closed'}
+                  tone={row.status === OperatorStatus.ACTIVE ? 'success' : 'neutral'}
                 />
+              ),
+            },
+            {
+              key: 'actions',
+              header: 'Actions',
+              width: 190,
+              align: 'right',
+              cell: (row) => (
+                <View className="flex-row flex-wrap items-center justify-end gap-2">
+                  <Button
+                    label="Edit"
+                    size="sm"
+                    variant="outline"
+                    fullWidth={false}
+                    onPress={() => {
+                      setEditDraft({
+                        name: row.name,
+                        city: row.city,
+                        latitude: String(row.latitude),
+                        longitude: String(row.longitude),
+                      });
+                      setEditing(row);
+                    }}
+                  />
+                  {row.status === OperatorStatus.ACTIVE ? (
+                    <Button
+                      label="Close"
+                      size="sm"
+                      variant="danger"
+                      fullWidth={false}
+                      onPress={() => setClosing(row)}
+                    />
+                  ) : (
+                    <Button
+                      label="Reopen"
+                      size="sm"
+                      variant="outline"
+                      fullWidth={false}
+                      loading={setStatus.isPending}
+                      onPress={() =>
+                        void setStatus
+                          .mutateAsync({ terminalId: row.id, status: OperatorStatus.ACTIVE })
+                          .then(() => showToast({ tone: 'success', title: 'Terminal reopened' }))
+                          .catch((error) =>
+                            showToast({
+                              tone: 'danger',
+                              title: 'Could not reopen it',
+                              message: error instanceof AppError ? error.message : 'Try again.',
+                            }),
+                          )
+                      }
+                    />
+                  )}
+                </View>
               ),
             },
           ]}
         />
       )}
+
+      <Modal
+        visible={editing !== null}
+        onClose={() => setEditing(null)}
+        title={`Edit ${editing?.name ?? ''}`}>
+        <View className="gap-4 pt-2">
+          <Input
+            label="Name"
+            value={editDraft.name}
+            onChangeText={(name) => setEditDraft((d) => ({ ...d, name }))}
+            autoCapitalize="words"
+          />
+          <Input
+            label="City"
+            value={editDraft.city}
+            onChangeText={(city) => setEditDraft((d) => ({ ...d, city }))}
+            autoCapitalize="words"
+          />
+          <View className="flex-row gap-3">
+            <Input
+              containerClassName="min-w-0 flex-1"
+              label="Latitude"
+              value={editDraft.latitude}
+              onChangeText={(latitude) => setEditDraft((d) => ({ ...d, latitude }))}
+              keyboardType="numbers-and-punctuation"
+            />
+            <Input
+              containerClassName="min-w-0 flex-1"
+              label="Longitude"
+              value={editDraft.longitude}
+              onChangeText={(longitude) => setEditDraft((d) => ({ ...d, longitude }))}
+              keyboardType="numbers-and-punctuation"
+            />
+          </View>
+          <Text variant="caption" tone="muted">
+            The code is not editable — routes resolve through it.
+          </Text>
+          <Button
+            label="Save"
+            disabled={editDraft.name.trim().length < 2 || editDraft.city.trim().length < 2}
+            loading={update.isPending}
+            onPress={() =>
+              editing &&
+              void update
+                .mutateAsync({
+                  terminalId: editing.id,
+                  name: editDraft.name,
+                  city: editDraft.city,
+                  latitude: Number(editDraft.latitude),
+                  longitude: Number(editDraft.longitude),
+                })
+                .then(() => {
+                  setEditing(null);
+                  showToast({ tone: 'success', title: 'Saved' });
+                })
+                .catch((error) =>
+                  showToast({
+                    tone: 'danger',
+                    title: 'Could not save',
+                    message:
+                      error instanceof AppError
+                        ? error.message
+                        : 'Check the coordinates are a real place.',
+                  }),
+                )
+            }
+          />
+          <Button label="Cancel" variant="ghost" onPress={() => setEditing(null)} />
+        </View>
+      </Modal>
+
+      <ConfirmDialog
+        visible={closing !== null}
+        title="Close this terminal?"
+        message={`${closing?.name ?? ''} will not be offered when a passenger searches, and no new route can be built through it.`}
+        consequence="Nothing is deleted. Routes and trips that already use it keep working until they are retired themselves."
+        confirmLabel="Close terminal"
+        destructive
+        loading={setStatus.isPending}
+        onConfirm={() =>
+          closing &&
+          void setStatus
+            .mutateAsync({ terminalId: closing.id, status: OperatorStatus.INACTIVE })
+            .then(() => {
+              setClosing(null);
+              showToast({ tone: 'success', title: 'Terminal closed' });
+            })
+            .catch((error) =>
+              showToast({
+                tone: 'danger',
+                title: 'Could not close it',
+                message: error instanceof AppError ? error.message : 'Try again.',
+              }),
+            )
+        }
+        onCancel={() => setClosing(null)}
+      />
 
       <Modal visible={adding} onClose={reset} title="Add a terminal">
         <View className="gap-4 pt-2">

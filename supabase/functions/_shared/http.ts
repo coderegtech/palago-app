@@ -25,6 +25,11 @@ export const ERROR_CODES = [
   'ALREADY_BOARDED',
   'WRONG_TRIP',
   'UNPAID_BOOKING',
+  'SCHEDULE_CONFLICT',
+  'INACTIVE_RESOURCE',
+  'ACCOUNT_DISABLED',
+  'EMAIL_TAKEN',
+  'LICENSE_EXPIRED',
   'NETWORK_ERROR',
   'INTERNAL_ERROR',
 ] as const;
@@ -46,6 +51,11 @@ const FALLBACK_MESSAGES: Record<ErrorCode, string> = {
   ALREADY_BOARDED: 'This passenger has already boarded.',
   WRONG_TRIP: 'This ticket is for a different trip.',
   UNPAID_BOOKING: 'This booking has not been paid for.',
+  SCHEDULE_CONFLICT: 'That clashes with another trip already on the schedule.',
+  INACTIVE_RESOURCE: 'That is no longer active and cannot be used for a new booking.',
+  ACCOUNT_DISABLED: 'This account has been deactivated. Ask your operator or an administrator.',
+  EMAIL_TAKEN: 'An account already exists for that email address.',
+  LICENSE_EXPIRED: 'That licence has expired before the departure date.',
   NETWORK_ERROR: 'No internet connection. Please try again.',
   INTERNAL_ERROR: 'Something went wrong on our end. Please try again.',
 };

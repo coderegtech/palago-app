@@ -9,12 +9,11 @@
  * Every peso figure here is test data. Nothing in PalaGo charges real money.
  */
 
-import { toAppError } from '@/lib/errors';
+import { fromRpcError, toAppError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import type {
   BusType,
   PassengerType,
-  StaffStatus,
   TripStatus,
   AssignmentStatus,
   OperatorStatus,
@@ -57,9 +56,10 @@ export interface OperatorDashboard {
   fleet?: { buses: number; activeBuses: number };
   crew?: {
     drivers: number;
-    activeDrivers: number;
+    /** Free for a new trip. Not "can sign in" — those are separate now. */
+    availableDrivers: number;
     assistants: number;
-    activeAssistants: number;
+    availableAssistants: number;
   };
 }
 
@@ -110,17 +110,6 @@ export interface ManifestEntry {
   paymentStatus: string;
   boardedAt: string | null;
   checkedInAt: string | null;
-}
-
-export interface CrewMember {
-  id: UUID;
-  name: string;
-  phone: string | null;
-  status: StaffStatus;
-  /** Drivers only. */
-  licenseNumber?: string;
-  userId: UUID | null;
-  createdAt: string;
 }
 
 export interface FleetBus {
@@ -307,74 +296,9 @@ export const operatorService = {
     return (data as unknown as ManifestRow[]).map(toManifestEntry);
   },
 
-  async listDrivers(): Promise<CrewMember[]> {
-    const { data, error } = await supabase
-      .from('drivers')
-      .select('id, name, phone, status, license_number, user_id, created_at')
-      .order('name');
-
-    if (error) throw toAppError(error);
-    return data.map((row) => ({
-      id: row.id,
-      name: row.name,
-      phone: row.phone,
-      status: row.status,
-      licenseNumber: row.license_number,
-      userId: row.user_id,
-      createdAt: row.created_at,
-    }));
-  },
-
-  async listAssistants(): Promise<CrewMember[]> {
-    const { data, error } = await supabase
-      .from('assistants')
-      .select('id, name, phone, status, user_id, created_at')
-      .order('name');
-
-    if (error) throw toAppError(error);
-    return data.map((row) => ({
-      id: row.id,
-      name: row.name,
-      phone: row.phone,
-      status: row.status,
-      userId: row.user_id,
-      createdAt: row.created_at,
-    }));
-  },
-
-  /**
-   * `operator_id` is not sent: it is defaulted from the caller's own operator
-   * so a request cannot create crew under someone else's company. RLS would
-   * refuse it anyway, but not sending it removes the question.
-   */
-  async addDriver(input: { name: string; licenseNumber: string; phone?: string; operatorId: UUID }) {
-    const { error } = await supabase.from('drivers').insert({
-      operator_id: input.operatorId,
-      name: input.name,
-      license_number: input.licenseNumber,
-      phone: input.phone || null,
-    });
-    if (error) throw toAppError(error);
-  },
-
-  async addAssistant(input: { name: string; phone?: string; operatorId: UUID }) {
-    const { error } = await supabase.from('assistants').insert({
-      operator_id: input.operatorId,
-      name: input.name,
-      phone: input.phone || null,
-    });
-    if (error) throw toAppError(error);
-  },
-
-  async setDriverStatus(driverId: UUID, status: StaffStatus) {
-    const { error } = await supabase.from('drivers').update({ status }).eq('id', driverId);
-    if (error) throw toAppError(error);
-  },
-
-  async setAssistantStatus(assistantId: UUID, status: StaffStatus) {
-    const { error } = await supabase.from('assistants').update({ status }).eq('id', assistantId);
-    if (error) throw toAppError(error);
-  },
+  // Crew live in `staff-service`: a driver is a record AND an account with two
+  // independent statuses, and reading either from `drivers` alone shows only
+  // half of them. This module keeps the console's trip and fleet reads.
 
   /**
    * Reads `operator_fleet`, not `buses`. `buses` is world-readable so trip
@@ -399,4 +323,119 @@ export const operatorService = {
       status: row.status,
     }));
   },
+
+  /**
+   * Adds a coach and its seat layout in one transaction. The layout is
+   * generated from `capacity` server-side, so a bus can never exist with a seat
+   * map that disagrees with how many people it holds.
+   */
+  async createBus(input: {
+    operatorId: UUID;
+    plateNumber: string;
+    busNumber: string;
+    capacity: number;
+    busType: BusType;
+    name?: string | null;
+  }): Promise<{ id: UUID; seats: number }> {
+    const { data, error } = await supabase.rpc('create_bus', {
+      p_operator_id: input.operatorId,
+      p_plate_number: input.plateNumber.trim(),
+      p_bus_number: input.busNumber.trim(),
+      p_capacity: input.capacity,
+      p_bus_type: input.busType,
+      p_name: input.name?.trim() || undefined,
+    });
+    if (error) throw fromRpcError(error);
+    return data as unknown as { id: UUID; seats: number };
+  },
+
+  /**
+   * Capacity is not editable and neither is the owner, from here: changing the
+   * seat count without regenerating the layout would make the seat map lie, and
+   * moving a coach between companies is an admin action.
+   */
+  async updateBus(input: {
+    busId: UUID;
+    busNumber: string;
+    plateNumber: string;
+    name?: string | null;
+    /** Admin only; the server refuses it from an operator. */
+    operatorId?: UUID;
+  }): Promise<void> {
+    const { error } = await supabase.rpc('update_bus', {
+      p_bus_id: input.busId,
+      p_bus_number: input.busNumber.trim(),
+      p_plate_number: input.plateNumber.trim(),
+      p_name: input.name?.trim() || undefined,
+      p_operator_id: input.operatorId || undefined,
+    });
+    if (error) throw fromRpcError(error);
+  },
+
+  /**
+   * Takes a coach off the road, or puts it back. Its scheduled departures are
+   * NOT cancelled — whether each still runs is a decision with passengers
+   * attached — but no new seat can be sold on them, and it cannot be scheduled
+   * again until it returns.
+   */
+  async setBusStatus(
+    busId: UUID,
+    status: OperatorStatus,
+    reason?: string,
+  ): Promise<{ upcomingTrips: number }> {
+    const { data, error } = await supabase.rpc('set_bus_status', {
+      p_bus_id: busId,
+      p_status: status,
+      p_reason: reason?.trim() || undefined,
+    });
+    if (error) throw fromRpcError(error);
+    const result = data as unknown as { upcomingTrips?: number };
+    return { upcomingTrips: result.upcomingTrips ?? 0 };
+  },
+
+  /** Routes this operator runs, for the schedule form. */
+  async listRoutes(): Promise<OperatorRoute[]> {
+    const { data, error } = await supabase
+      .from('routes')
+      .select(
+        'id, duration_minutes, status, ' +
+          'origin:terminals!routes_origin_terminal_id_fkey(code, name), ' +
+          'destination:terminals!routes_destination_terminal_id_fkey(code, name)',
+      )
+      .order('created_at');
+
+    if (error) throw toAppError(error);
+    return (data as unknown as OperatorRouteRow[]).map((row) => ({
+      id: row.id,
+      durationMinutes: row.duration_minutes,
+      status: row.status,
+      originCode: row.origin?.code ?? '',
+      originName: row.origin?.name ?? '',
+      destinationCode: row.destination?.code ?? '',
+      destinationName: row.destination?.name ?? '',
+    }));
+  },
 };
+
+export interface OperatorRoute {
+  id: UUID;
+  durationMinutes: number;
+  status: OperatorStatus;
+  originCode: string;
+  originName: string;
+  destinationCode: string;
+  destinationName: string;
+}
+
+/**
+ * Declared by hand, like the view rows above: the two terminal joins are
+ * aliased to disambiguate the origin and destination foreign keys, which the
+ * generated types cannot narrow.
+ */
+interface OperatorRouteRow {
+  id: string;
+  duration_minutes: number;
+  status: OperatorStatus;
+  origin: { code: string; name: string } | null;
+  destination: { code: string; name: string } | null;
+}

@@ -4,7 +4,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { StaffStatus } from '@/constants/enums';
+import type { BusType, OperatorStatus } from '@/constants/enums';
 import { operatorService } from '@/services/operator-service';
 import type { ISODate, UUID } from '@/types/models';
 
@@ -13,9 +13,8 @@ export const operatorKeys = {
   trips: (date?: ISODate) => ['operator', 'trips', date ?? 'all'] as const,
   trip: (id: UUID) => ['operator', 'trip', id] as const,
   manifest: (tripId: UUID) => ['operator', 'manifest', tripId] as const,
-  drivers: ['operator', 'drivers'] as const,
-  assistants: ['operator', 'assistants'] as const,
   buses: ['operator', 'buses'] as const,
+  routes: ['operator', 'routes'] as const,
 };
 
 export function useOperatorDashboard(date?: ISODate) {
@@ -53,66 +52,72 @@ export function useManifest(tripId: UUID | null) {
   });
 }
 
-export function useDrivers() {
-  return useQuery({ queryKey: operatorKeys.drivers, queryFn: () => operatorService.listDrivers() });
-}
-
-export function useAssistants() {
-  return useQuery({
-    queryKey: operatorKeys.assistants,
-    queryFn: () => operatorService.listAssistants(),
-  });
-}
+// Crew hooks live in `use-staff`. A driver is a record AND an account with two
+// independent statuses, and `drivers` alone shows only one of them.
 
 export function useBuses() {
   return useQuery({ queryKey: operatorKeys.buses, queryFn: () => operatorService.listBuses() });
 }
 
-export function useAddDriver() {
+export function useOperatorRoutes() {
+  return useQuery({ queryKey: operatorKeys.routes, queryFn: () => operatorService.listRoutes() });
+}
+
+/** Everything a fleet change moves: the fleet list, the dashboard, the schedule. */
+function useRefreshFleet() {
   const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: operatorKeys.buses });
+    void queryClient.invalidateQueries({ queryKey: ['operator', 'dashboard'] });
+    void queryClient.invalidateQueries({ queryKey: ['schedule'] });
+    void queryClient.invalidateQueries({ queryKey: ['admin'] });
+  };
+}
+
+export function useCreateBus() {
+  const refresh = useRefreshFleet();
+
   return useMutation({
-    mutationFn: (input: { name: string; licenseNumber: string; phone?: string; operatorId: UUID }) =>
-      operatorService.addDriver(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: operatorKeys.drivers });
-      queryClient.invalidateQueries({ queryKey: ['operator', 'dashboard'] });
-    },
+    mutationFn: (input: {
+      operatorId: UUID;
+      plateNumber: string;
+      busNumber: string;
+      capacity: number;
+      busType: BusType;
+      name?: string | null;
+    }) => operatorService.createBus(input),
+    onSuccess: refresh,
   });
 }
 
-export function useAddAssistant() {
-  const queryClient = useQueryClient();
+export function useUpdateBus() {
+  const refresh = useRefreshFleet();
+
   return useMutation({
-    mutationFn: (input: { name: string; phone?: string; operatorId: UUID }) =>
-      operatorService.addAssistant(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: operatorKeys.assistants });
-      queryClient.invalidateQueries({ queryKey: ['operator', 'dashboard'] });
-    },
+    mutationFn: (input: {
+      busId: UUID;
+      busNumber: string;
+      plateNumber: string;
+      name?: string | null;
+      operatorId?: UUID;
+    }) => operatorService.updateBus(input),
+    onSuccess: refresh,
   });
 }
 
-export function useSetCrewStatus() {
-  const queryClient = useQueryClient();
+export function useSetBusStatus() {
+  const refresh = useRefreshFleet();
 
   return useMutation({
     mutationFn: ({
-      kind,
-      id,
+      busId,
       status,
+      reason,
     }: {
-      kind: 'DRIVER' | 'ASSISTANT';
-      id: UUID;
-      status: StaffStatus;
-    }) =>
-      kind === 'DRIVER'
-        ? operatorService.setDriverStatus(id, status)
-        : operatorService.setAssistantStatus(id, status),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: variables.kind === 'DRIVER' ? operatorKeys.drivers : operatorKeys.assistants,
-      });
-      queryClient.invalidateQueries({ queryKey: ['operator', 'dashboard'] });
-    },
+      busId: UUID;
+      status: OperatorStatus;
+      reason?: string;
+    }) => operatorService.setBusStatus(busId, status, reason),
+    onSuccess: refresh,
   });
 }

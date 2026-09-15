@@ -6,6 +6,7 @@ import {
   formatDuration,
   formatTime,
   minutesUntil,
+  timeAgo,
   toISODate,
 } from '@/utils/datetime';
 
@@ -82,5 +83,29 @@ describe('countdowns', () => {
 
   it('reports whole minutes remaining', () => {
     expect(minutesUntil(new Date(now + 9.5 * 60_000).toISOString())).toBe(9);
+  });
+});
+
+describe('timeAgo', () => {
+  const now = new Date('2026-09-14T12:00:00Z');
+  const ago = (iso: string) => timeAgo(iso, now);
+
+  it('says "just now" under a minute', () => {
+    expect(ago('2026-09-14T11:59:30Z')).toBe('just now');
+  });
+
+  it('counts minutes, then hours, then days', () => {
+    expect(ago('2026-09-14T11:45:00Z')).toBe('15m ago');
+    expect(ago('2026-09-14T09:00:00Z')).toBe('3h ago');
+    expect(ago('2026-09-12T12:00:00Z')).toBe('2d ago');
+  });
+
+  it('falls back to a date once it is more than a week old', () => {
+    // "37d ago" tells a reader nothing they can act on.
+    expect(ago('2026-08-08T12:00:00Z')).toMatch(/Aug/);
+  });
+
+  it('does not report a negative age when a clock runs fast', () => {
+    expect(ago('2026-09-14T12:05:00Z')).toBe('just now');
   });
 });

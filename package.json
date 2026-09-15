@@ -27,6 +27,7 @@
     "expo-linear-gradient": "~57.0.1",
     "expo-linking": "~57.0.9",
     "expo-location": "~57.0.16",
+    "expo-notifications": "~57.0.18",
     "expo-router": "~57.0.19",
     "expo-splash-screen": "~57.0.8",
     "expo-status-bar": "~57.0.1",
@@ -87,7 +88,7 @@
     "db:verify": "node scripts/verify-rls.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "db:verify:booking": "node scripts/verify-booking.mjs",
-    "db:verify:all": "node scripts/verify-rls.mjs && node scripts/verify-booking.mjs && node scripts/verify-payment.mjs && node scripts/verify-boarding.mjs && node scripts/verify-operator.mjs && node scripts/verify-tracking.mjs && node scripts/verify-wallet.mjs && node scripts/verify-loyalty.mjs && node scripts/verify-sos.mjs && node scripts/verify-discount.mjs && node scripts/verify-counter.mjs && node scripts/verify-admin.mjs",
+    "db:verify:all": "node scripts/verify-rls.mjs && node scripts/verify-booking.mjs && node scripts/verify-payment.mjs && node scripts/verify-boarding.mjs && node scripts/verify-operator.mjs && node scripts/verify-tracking.mjs && node scripts/verify-wallet.mjs && node scripts/verify-loyalty.mjs && node scripts/verify-sos.mjs && node scripts/verify-discount.mjs && node scripts/verify-counter.mjs && node scripts/verify-notifications.mjs && node scripts/verify-staff-accounts.mjs && node scripts/verify-schedules.mjs && node scripts/verify-admin.mjs",
     "db:verify:payment": "node scripts/verify-payment.mjs",
     "functions:serve": "supabase functions serve --env-file supabase/functions/.env",
     "db:verify:boarding": "node scripts/verify-boarding.mjs",
@@ -99,7 +100,10 @@
     "db:verify:admin": "node scripts/verify-admin.mjs",
     "build:web": "expo export --platform web",
     "db:verify:discount": "node scripts/verify-discount.mjs",
-    "db:verify:counter": "node scripts/verify-counter.mjs"
+    "db:verify:counter": "node scripts/verify-counter.mjs",
+    "db:verify:notifications": "node scripts/verify-notifications.mjs",
+    "db:verify:staff": "node scripts/verify-staff-accounts.mjs",
+    "db:verify:schedules": "node scripts/verify-schedules.mjs"
   },
   "private": true
 }
