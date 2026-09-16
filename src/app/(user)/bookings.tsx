@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { FlatList, Pressable, View } from 'react-native';
+import { FlatList, View } from 'react-native';
 import { Ticket } from 'lucide-react-native';
 
 import { Badge, type BadgeTone } from '@/components/ui/badge';
@@ -35,15 +35,15 @@ function BookingRow({ booking }: { booking: BookingSummary }) {
   const awaitingPayment = booking.status === BookingStatus.PAYMENT_PENDING;
 
   return (
-    <Pressable
+    <Card
       accessibilityRole="button"
       accessibilityLabel={`Booking ${booking.reference}, ${booking.originCode} to ${booking.destinationCode}, ${status.label}`}
       onPress={() =>
         awaitingPayment
           ? router.push({ pathname: '/booking/payment', params: { bookingId: booking.id } })
           : router.push({ pathname: '/bookings/[id]', params: { id: booking.id } })
-      }>
-      <Card className="gap-3 active:bg-primary-soft">
+      }
+      className="gap-3 active:bg-primary-soft">
         <View className="flex-row items-center justify-between">
           <Badge label={booking.operatorName} tone="primary" />
           <Badge label={status.label} tone={status.tone} />
@@ -75,8 +75,7 @@ function BookingRow({ booking }: { booking: BookingSummary }) {
             {formatMoney(booking.totalAmount)}
           </Text>
         </View>
-      </Card>
-    </Pressable>
+    </Card>
   );
 }
 

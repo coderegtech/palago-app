@@ -52,7 +52,7 @@ export default function LoginScreen() {
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        className="pt-8"
+        className="pt-8 flex-1"
       >
         {errorMessage ? (
           <Alert

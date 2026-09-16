@@ -74,6 +74,113 @@ allowlist and do not match the baked-in `EXPO_PUBLIC_WEB_PAYMENT_BASE_URL`, so *
 payment QR codes only work correctly on the production URL** unless a preview hostname is added
 deliberately.
 
+## Developing against the hosted project
+
+```bash
+pnpm cloud:check
+```
+
+Running the app against Supabase Cloud instead of the Docker stack is a `.env`
+change and four other things. `cloud:check` reports all five and names the command
+that fixes each.
+
+### 1. Point the app at it
+
+```
+EXPO_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable key>
+```
+
+From **Project Settings → API**. Use the publishable (`sb_publishable_…`) key, never
+the secret or service-role key — every `EXPO_PUBLIC_*` value is inlined into the
+bundle and readable by anyone.
+
+### 2. Apply the migrations
+
+```bash
+SUPABASE_PROJECT_REF=<ref> pnpm db:push:prod -- --yes
+```
+
+The database goes first — see the section below for why a client ahead of its
+schema fails closed while the reverse is harmless.
+
+### 3. Set the function secrets, then deploy the functions
+
+```bash
+supabase secrets set QR_SIGNING_SECRET=<32+ random chars> PAYMENT_PROVIDER=mock WEB_PAYMENT_BASE_URL=https://<deployed-origin>
+```
+
+```bash
+supabase functions deploy
+```
+
+Secrets before functions: the functions **fail closed** without `QR_SIGNING_SECRET`,
+which is the intended behaviour — an unsigned boarding pass is worse than none —
+and is invisible from the screen. Without any functions deployed at all, the app
+browses perfectly and every payment, boarding scan and staff provisioning fails.
+
+### 4. Make the first SUPER_ADMIN by hand
+
+This is the one step with no command, and it is deliberate. `handle_new_user`
+hard-codes every sign-up to `USER` and ignores any role in the metadata, and no
+client can write `profiles.role` — which is exactly the defence that stops a
+stranger signing up as an administrator. So the first one is promoted directly,
+once, in the Supabase dashboard's SQL editor:
+
+```sql
+update public.profiles set role = 'SUPER_ADMIN' where email = 'you@example.com';
+```
+
+Sign up through the app first so the row exists. After that nothing else needs the
+SQL editor: that account provisions operator accounts through the app, and each
+operator provisions their own drivers and crew.
+
+### 5. Put something in it
+
+**Never run `supabase/seed.sql` against a hosted project.** Beyond the accounts it
+creates, it fabricates bookings, payments, receipts, wallet balances, loyalty
+points and boarding scans. This build charges nothing, but a receipt or a balance
+in a shared project is indistinguishable from a real one.
+
+For a project you want to sign in to and demo, there is
+**`supabase/seed.cloud.sql`** — the same accounts, operators, terminals, routes,
+coaches, crew and a rolling set of departures, and none of the fabricated
+transactions. Paste it into **Studio → SQL Editor**, or:
+
+```bash
+psql "<connection string from Project Settings → Database>" -f supabase/seed.cloud.sql
+```
+
+Migrations first — it assumes the schema. Every statement is guarded, so running
+it twice is a no-op.
+
+For a project meant to become real, skip it and add terminals, routes, operators
+and coaches through the admin console. Those go through `create_operator` /
+`create_terminal` / `create_route` / `create_bus`, which validate and write
+`audit_logs`, so the project has a genuine trail from its first row — which a SQL
+paste does not leave.
+
+An empty project is not broken, it just looks it: the app renders with no
+operators, no routes and nothing to search.
+
+### What still needs Docker
+
+**`pnpm db:verify:all`.** The sixteen suites write bookings, payments, wallet
+top-ups and boarding scans, so `scripts/_verify-env.mjs` refuses any target that is
+not localhost. `VERIFY_ALLOW_REMOTE=1` overrides it and would write all of that
+into the hosted project — that guard exists because `db:verify:all` once did
+exactly that.
+
+**`pnpm db:reset` and `pnpm db:types`.** Reset is local-only by definition. `db:types`
+passes `--local`; against a hosted project use:
+
+```bash
+pnpm db:types:cloud
+```
+
+So: the app can run against cloud without Docker, and the verification suite cannot.
+Keep the local stack for that.
+
 ## The database goes first, and there is a check for it
 
 ```bash

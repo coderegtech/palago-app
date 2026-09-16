@@ -149,6 +149,16 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
   For equal-height cards in a row use `flex-1` on the card: the row already stretches each
   Pressable to the tallest sibling, and `flex-1` fills that with no percentage involved.
   `h-full` is still right for a bar inside a track with an explicit height (`h-2`).
+- **A `Card` with an `active:` class is a Pressable on device, so never wrap one in another.**
+  NativeWind implements pseudo-classes by *upgrading the component*: a `View` carrying `:active`,
+  `:hover` or `:focus` is swapped for a real `Pressable` so it has somewhere to hang
+  `onPressIn`/`onPressOut` (`react-native-css-interop/.../render-component.js`). So
+  `<Pressable onPress><Card className="active:…"/></Pressable>` is two nested Pressables, the
+  inner one takes the touch responder, and the outer `onPress` never fires — the card highlights
+  under a finger and does nothing. On web `:active` is ordinary CSS, no component is swapped and
+  the click bubbles, so it looks perfect in a browser and in Jest, which is how six of these
+  shipped. Pass `onPress` to `Card` instead; `src/components/ui/__tests__/card.test.tsx` scans
+  the source for the nesting, because no behavioural test on web can see it.
 - **react-native-svg: use `transform="translate(x y)"`, not `translateX`/`translateY` props.** Those
   are native-only and leak to the DOM on web as unknown React attributes.
 - **App icons are generated** from `assets/brand/palago-icon.svg` by `node scripts/generate-icons.mjs`.

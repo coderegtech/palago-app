@@ -31,13 +31,13 @@ function TripRow({ trip }: { trip: TripOverview }) {
     trip.passengerCount > 0 ? Math.round((trip.boardedCount / trip.passengerCount) * 100) : 0;
 
   return (
-    <Pressable
+    <Card
       accessibilityRole="button"
       accessibilityLabel={`${trip.tripNumber}, ${trip.originCode} to ${trip.destinationCode}, ${trip.passengerCount} passengers, ${trip.boardedCount} boarded`}
       onPress={() =>
         router.push({ pathname: '/(operator)/manifest', params: { tripId: trip.id } })
-      }>
-      <Card className="gap-3 active:bg-primary-soft">
+      }
+      className="gap-3 active:bg-primary-soft">
         <View className="flex-row items-center justify-between">
           <Text variant="mono" className="text-[12px]">
             {trip.tripNumber}
@@ -94,8 +94,7 @@ function TripRow({ trip }: { trip: TripOverview }) {
             </Text>
           </View>
         </View>
-      </Card>
-    </Pressable>
+    </Card>
   );
 }
 

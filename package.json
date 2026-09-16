@@ -111,7 +111,9 @@
     "build:apk": "eas build --profile preview --platform android",
     "db:verify:security": "node scripts/verify-security.mjs",
     "test:coverage": "jest --coverage",
-    "deploy:check": "node scripts/check-deploy.mjs"
+    "deploy:check": "node scripts/check-deploy.mjs",
+    "cloud:check": "node scripts/check-cloud.mjs",
+    "db:types:cloud": "supabase gen types typescript --linked > src/types/database.ts"
   },
   "private": true
 }

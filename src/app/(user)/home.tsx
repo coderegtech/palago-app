@@ -91,15 +91,15 @@ function UpcomingBooking({ booking }: { booking: BookingSummary }) {
   const awaitingPayment = booking.status === BookingStatus.PAYMENT_PENDING;
 
   return (
-    <Pressable
+    <Card
       accessibilityRole="button"
       accessibilityLabel={`Booking ${booking.reference}, ${booking.originCode} to ${booking.destinationCode}`}
       onPress={() =>
         awaitingPayment
           ? router.push({ pathname: '/booking/payment', params: { bookingId: booking.id } })
           : router.push({ pathname: '/bookings/[id]', params: { id: booking.id } })
-      }>
-      <Card className="gap-2 active:bg-primary-soft">
+      }
+      className="gap-2 active:bg-primary-soft">
         <View className="flex-row items-center justify-between">
           <Badge label={booking.operatorName} tone="primary" />
           <Badge
@@ -120,8 +120,7 @@ function UpcomingBooking({ booking }: { booking: BookingSummary }) {
               : 'Seat assigned once paid'}
           </Text>
         </View>
-      </Card>
-    </Pressable>
+    </Card>
   );
 }
 
@@ -193,55 +192,50 @@ export default function HomeScreen() {
 
 {/* Both figures are read from the database — neither is invented. */}
         <View className="flex-row gap-3">
-          <Pressable
-            className="flex-1"
+          <Card
             accessibilityRole="button"
             accessibilityLabel="Open your wallet"
-            onPress={() => router.push('/wallet')}>
-            <Card className="gap-1">
-              <Text variant="caption" tone="muted">
-                Wallet
-              </Text>
-              <Text variant="subtitle">{formatMoney(wallet.data?.balance ?? 0)}</Text>
-              <Text variant="caption" tone="muted" className="text-[10px]">
-                Available balance
-              </Text>
-            </Card>
-          </Pressable>
+            onPress={() => router.push('/wallet')}
+            className="flex-1 gap-1 active:bg-primary-soft">
+            <Text variant="caption" tone="muted">
+              Wallet
+            </Text>
+            <Text variant="subtitle">{formatMoney(wallet.data?.balance ?? 0)}</Text>
+            <Text variant="caption" tone="muted" className="text-[10px]">
+              Available balance
+            </Text>
+          </Card>
 
-          <Pressable
-            className="flex-1"
+          <Card
             accessibilityRole="button"
             accessibilityLabel="Open your rewards"
-            onPress={() => router.push('/rewards')}>
-            <Card className="gap-1">
-              <Text variant="caption" tone="muted">
-                Points
-              </Text>
-              <Text variant="subtitle">{loyalty.data?.pointsBalance ?? 0}</Text>
-              <Text variant="caption" tone="muted" className="text-[10px]">
-                Earned on completed trips
-              </Text>
-            </Card>
-          </Pressable>
+            onPress={() => router.push('/rewards')}
+            className="flex-1 gap-1 active:bg-primary-soft">
+            <Text variant="caption" tone="muted">
+              Points
+            </Text>
+            <Text variant="subtitle">{loyalty.data?.pointsBalance ?? 0}</Text>
+            <Text variant="caption" tone="muted" className="text-[10px]">
+              Earned on completed trips
+            </Text>
+          </Card>
         </View>
 
-        <Pressable
+        <Card
           accessibilityRole="button"
           accessibilityLabel="Search trips"
-          onPress={() => router.push('/booking/search')}>
-          <Card className="flex-row items-center gap-3 border-primary/30 bg-primary-soft active:bg-border">
-            <View className="h-10 w-10 items-center justify-center rounded-full bg-primary">
-              <Search size={18} color={Colors.textInverse} />
-            </View>
-            <View className="flex-1">
-              <Text variant="bodyStrong">Search trips</Text>
-              <Text variant="caption" tone="muted">
-                Cherry Bus and RoRo Bus across Palawan
-              </Text>
-            </View>
-          </Card>
-        </Pressable>
+          onPress={() => router.push('/booking/search')}
+          className="flex-row items-center gap-3 border-primary/30 bg-primary-soft active:bg-border">
+          <View className="h-10 w-10 items-center justify-center rounded-full bg-primary">
+            <Search size={18} color={Colors.textInverse} />
+          </View>
+          <View className="flex-1">
+            <Text variant="bodyStrong">Search trips</Text>
+            <Text variant="caption" tone="muted">
+              Cherry Bus and RoRo Bus across Palawan
+            </Text>
+          </View>
+        </Card>
 
         <View className="gap-2">
           <Text variant="label" tone="muted">
@@ -292,26 +286,24 @@ export default function HomeScreen() {
           ) : (
             <View className="flex-row gap-3">
               {operators.data.map((operator) => (
-                <Pressable
+                // `flex-1`, never `h-full`: the row stretches each card to the
+                // tallest sibling and flex-1 fills that, whereas `height: 100%`
+                // is a percentage of a parent with no definite height inside a
+                // ScrollView — harmless on web, resolved against the scroll
+                // viewport by Yoga, which made each card screen-tall in the APK.
+                // And `onPress` on the Card, not a wrapping Pressable — see the
+                // note in ui/card.tsx.
+                <Card
                   key={operator.id}
                   accessibilityRole="button"
                   accessibilityLabel={`Search ${operator.name} trips`}
-                  className="flex-1"
                   onPress={() =>
                     router.push({
                       pathname: '/booking/search',
                       params: { operator: operator.code },
                     })
-                  }>
-                  {/*
-                    `flex-1`, never `h-full`. The row stretches each Pressable to
-                    the tallest sibling, and flex-1 fills that — whereas
-                    `height: 100%` is a percentage of a parent with no definite
-                    height inside a ScrollView, which web resolves harmlessly and
-                    Yoga resolves against the scroll viewport. On web the cards
-                    looked right; in the APK each one was screen-tall.
-                  */}
-                  <Card className="flex-1 gap-2 active:bg-primary-soft">
+                  }
+                  className="flex-1 gap-2 active:bg-primary-soft">
                     <View className="h-9 w-9 items-center justify-center rounded-full bg-primary-soft">
                       {operator.code === 'RORO' ? (
                         <Ship size={18} color={Colors.primary} />
@@ -323,8 +315,7 @@ export default function HomeScreen() {
                     <Text variant="caption" tone="muted" numberOfLines={2}>
                       {operator.description ?? 'View available trips'}
                     </Text>
-                  </Card>
-                </Pressable>
+                </Card>
               ))}
             </View>
           )}
