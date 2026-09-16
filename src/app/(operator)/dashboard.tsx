@@ -14,7 +14,7 @@ import {
 } from 'lucide-react-native';
 import { useRouter, type Href } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { Alert } from '@/components/ui/alert';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
@@ -350,14 +350,14 @@ interface ManagementLinkProps {
 function ManagementLink({ label, hint, icon, href }: ManagementLinkProps) {
   const router = useRouter();
 
+  // `flex-1`, not `h-full` — see the note in (user)/home.tsx. And `onPress`
+  // here rather than a wrapping Pressable — see the note in ui/card.tsx.
   return (
-    <Pressable
+    <Card
       accessibilityRole="link"
       accessibilityLabel={`${label}: ${hint}`}
       onPress={() => router.push(href)}
-      className="min-w-[30%] flex-1">
-      {/* flex-1, not h-full — see the note in (user)/home.tsx. */}
-      <Card className="flex-1 gap-2 active:bg-primary-soft">
+      className="min-w-[30%] flex-1 gap-2 active:bg-primary-soft">
         <View className="h-9 w-9 items-center justify-center rounded-full bg-primary-soft">
           {icon}
         </View>
@@ -365,8 +365,7 @@ function ManagementLink({ label, hint, icon, href }: ManagementLinkProps) {
         <Text variant="caption" tone="muted">
           {hint}
         </Text>
-      </Card>
-    </Pressable>
+    </Card>
   );
 }
 
