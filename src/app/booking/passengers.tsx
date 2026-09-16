@@ -1,33 +1,23 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect } from 'react';
-import { Controller, useFieldArray, useForm } from 'react-hook-form';
+import { useFieldArray, useForm } from 'react-hook-form';
 import { KeyboardAvoidingView, Platform, View } from 'react-native';
 
-import { FormInput } from '@/components/common/form-input';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Header } from '@/components/ui/header';
 import { Screen } from '@/components/ui/screen';
-import { Select } from '@/components/ui/select';
 import { Text } from '@/components/ui/text';
 import { ErrorCode } from '@/constants/errors';
 import { PassengerType } from '@/constants/enums';
 import { useAuth } from '@/hooks/use-auth';
 import { useCreateBooking } from '@/hooks/use-trips';
 import { AppError } from '@/lib/errors';
+import { PassengerFields } from '@/components/booking/passenger-fields';
 import { passengersFormSchema, type PassengersFormInput } from '@/schemas/booking';
 import { useBookingStore } from '@/stores/booking-store';
 import { useUIStore } from '@/stores/ui-store';
-
-const PASSENGER_TYPES = [
-  { value: PassengerType.ADULT, label: 'Adult' },
-  { value: PassengerType.CHILD, label: 'Child' },
-  { value: PassengerType.SENIOR, label: 'Senior', description: 'Discount applied by the operator' },
-  { value: PassengerType.STUDENT, label: 'Student' },
-  { value: PassengerType.PWD, label: 'PWD', description: 'Person with disability' },
-];
 
 export default function PassengersScreen() {
   const { tripId: paramTripId } = useLocalSearchParams<{ tripId?: string }>();
@@ -152,57 +142,7 @@ export default function PassengersScreen() {
 
         <View className="gap-4">
           {fields.map((field, index) => (
-            <Card key={field.id} className="gap-3">
-              <Text variant="subtitle">Passenger {index + 1}</Text>
-
-              <FormInput
-                control={control}
-                name={`passengers.${index}.name`}
-                label="Full name"
-                placeholder="Juan Dela Cruz"
-                autoCapitalize="words"
-                autoComplete="name"
-              />
-
-              {/*
-                A Controller rather than watch() + setValue: `watch` returns a
-                new function identity on every render, which the React Hooks
-                lint rule flags as unmemoizable, and Controller is the API
-                intended for a non-native input like this Select.
-              */}
-              <Controller
-                control={control}
-                name={`passengers.${index}.type`}
-                render={({ field, fieldState }) => (
-                  <Select
-                    label="Passenger type"
-                    value={field.value}
-                    options={PASSENGER_TYPES}
-                    onChange={field.onChange}
-                    error={fieldState.error?.message}
-                  />
-                )}
-              />
-
-              <FormInput
-                control={control}
-                name={`passengers.${index}.phone`}
-                label="Mobile number (optional)"
-                placeholder="0917 123 4567"
-                keyboardType="phone-pad"
-                autoComplete="tel"
-              />
-
-              <FormInput
-                control={control}
-                name={`passengers.${index}.email`}
-                label="Email (optional)"
-                placeholder="you@example.com"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoComplete="email"
-              />
-            </Card>
+            <PassengerFields key={field.id} control={control} index={index} />
           ))}
         </View>
 

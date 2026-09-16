@@ -163,6 +163,37 @@ paste does not leave.
 An empty project is not broken, it just looks it: the app renders with no
 operators, no routes and nothing to search.
 
+### Pushing config, safely
+
+```bash
+supabase config push
+```
+
+Sends `supabase/config.toml` to the linked project. There is **no `--dry-run`**, so
+the file has to be right before you run it.
+
+The URLs are the part that used to make this dangerous: `site_url` was hard-coded
+to `http://127.0.0.1:8090`, and pushing that would have set the hosted project's
+Site URL to localhost and broken every password-reset link, since Supabase refuses
+to redirect to an origin that is not on the allow list. Both URL settings now read
+`env(SUPABASE_AUTH_SITE_URL)` from `.env`, which the CLI substitutes automatically
+— one file, whatever the environment is pointed at.
+
+`env()` works in a plain string and inside an array element. It does **not** work
+for a boolean: a quoted value in a boolean field fails the entire file with
+`CliConfigParseError`. Verified by trying it.
+
+So one setting stays environment-blind and matters:
+
+> **`enable_confirmations = false`.** A push sets it false in the target. That is
+> what you want while building — Supabase Cloud defaults it *on*, and with no
+> custom SMTP the confirmation email goes through a shared sender that is
+> rate-limited to a handful an hour and often never arrives, which reads as a
+> broken sign-up. Before a real launch, turn it on — in the dashboard, or here
+> before the last push — and configure custom SMTP at the same time. An
+> unconfirmed address means somebody can sign up as an address they do not own,
+> and booking references get emailed to it.
+
 ### What still needs Docker
 
 **`pnpm db:verify:all`.** The sixteen suites write bookings, payments, wallet
