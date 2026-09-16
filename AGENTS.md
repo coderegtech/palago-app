@@ -114,6 +114,24 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
   `email_change_token_new`/`email_change` set to `''` and a matching `auth.identities` row, or
   sign-in fails with the misleading "Database error querying schema". See docs/database.md.
 - Guards (`AuthGate`) are navigation only. Data access is enforced by RLS — see docs/auth.md.
+- **The database goes first, and `pnpm deploy:check` enforces it.** A client ahead of its schema
+  fails closed: it asks PostgREST for a column by name, gets an error, and takes the screen with
+  it. A database ahead of its client is harmless. Phase 14's browser verification spent a while
+  chasing "Could not load trips" that was `trip_search` missing `operator_status` on the hosted
+  project — `.env` points there, so the dev server was talking to a schema three migrations
+  behind. Deploy migrations, then functions, then the client.
+- **A `FOR ALL` policy outlives the feature that needed it, and `ALL` includes `DELETE`.** Phase 13
+  found four write paths this way, all the same mistake: a later migration introduces a
+  SECURITY DEFINER function as the authorised path, revokes the grants it remembers, and leaves the
+  old `FOR ALL` policy standing. An operator could hard-delete an unsold trip (cascading away its
+  GPS trail and crew record, and detaching its SOS incidents), could roster a *rival operator's*
+  driver by inserting into `trip_assignments` — whose policy checked the trip's operator and never
+  the driver's — and could thereby skip all five validations in `assign_trip_crew`. Only the
+  exclusion constraint held, because a constraint cannot be bypassed by choosing another code path.
+  **A privileged operation is only as narrow as its narrowest path:** when a function becomes the
+  front door, revoke the table in the same migration and drop the write policy, so the intent is in
+  the policy rather than in a grant nobody can see. The query that finds the next one is in
+  docs/security-review.md §4 — after that migration only `bus_locations` INSERT remains.
 - **Observe is configured at module scope, and its param filter is a privacy control.**
   `useObserve()` asserts the router integration does not toggle during a screen's lifecycle, so
   `Observe.configure(...)` runs when `src/lib/observe.ts` is imported by the root layout — never in

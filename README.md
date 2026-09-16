@@ -16,15 +16,19 @@ public test-payment page, built on Expo and Supabase.
 
 ## Status
 
-**Phases 1–10 of 15 are built and verified.** The full passenger journey works end to end —
-trip search, a visual seat map, atomic seat reservation proven under concurrent contention, a
-payment QR, a public test-payment page, server-side confirmation with receipts, Realtime status,
-a signed boarding pass issued only after payment and usable once, a mock wallet with a signed
-ledger, and loyalty points earned for completed trips. The operator console (dashboard, travel
-data, manifest, fleet, crew, terminal scanner) and the driver app (duty board, trip lifecycle,
-GPS publishing, door scanner) are in, as are passenger-raised emergency alerts with the operator
-response workflow behind them. The notifications feed renders a clearly-labelled placeholder
-naming the phase that will implement it; nothing is faked as working. A feature-by-feature
+**All fifteen phases are built; Phase 15 is partly done and says so.** The full passenger journey
+works end to end — trip search, a visual seat map, atomic seat reservation proven under concurrent
+contention, a payment QR, a public test-payment page, server-side confirmation with receipts,
+Realtime status, a signed boarding pass issued only after payment and usable once, a mock wallet
+with a signed ledger, loyalty points, an in-app notification feed, and passenger-raised emergency
+alerts. The operator console, the admin console and the driver app are in, along with the
+admin → operator → crew hierarchy and schedule-conflict prevention enforced by database
+constraints rather than by a form.
+
+A security review (Phase 13) found and closed four write paths; Phase 14 added a coverage ratchet
+and an honest map of which level tests what. What is **not** done is stated in each document rather
+than implied: push delivery to a handset is unproven, MapLibre has never run on hardware, and the
+performance and structured-logging halves of Phase 15 are outstanding. A feature-by-feature
 reference is in [docs/features.md](docs/features.md).
 
 | Phase | Scope | State |
@@ -40,10 +44,10 @@ reference is in [docs/features.md](docs/features.md).
 | 9 | Mock wallet, test top-ups, paying a booking from balance | **Done** |
 | 10 | Loyalty — points, rewards catalogue, redemption | **Done** |
 | 11 | SOS — emergency alerts, location capture, operator response workflow | **Done** |
-| 12 | Notifications | Not started |
-| 13 | Security review | Not started |
-| 14 | Testing | Not started |
-| 15 | Production preparation | Not started |
+| 12 | Notifications | **Done** — push to a handset still unproven |
+| 13 | Security review | **Done** |
+| 14 | Testing | **Done** |
+| 15 | Production preparation | **Partly** — monitoring, environments and deployment in; performance and logging not |
 
 ## Tech stack
 
@@ -140,14 +144,18 @@ any migration that touches one:
 pnpm db:verify:all
 ```
 
-446 checks across eleven suites — 31 RLS, 38 booking, 49 payment, 38 boarding, 34 operator, 52
-tracking, 51 wallet, 49 loyalty, 40 SOS, 33 discount and 31 admin — including eight simultaneous
-callers racing for one seat, confirming a payment five times to prove one receipt, six simultaneous
-scans to prove a ticket boards once, one operator trying to read a rival's manifest, revenue and
-fleet, a driver trying to rewrite the GPS trail they published, eight concurrent top-ups to prove
-no centavo is lost, a redeem/undo loop that must not inflate lifetime points, a panicking second
-press of the SOS button that must not raise a second emergency, and a passenger trying to add a bus
-to someone else's fleet — which is a real hole this suite caught.
+802 checks across sixteen suites, every one signed in as a real seeded role through the ordinary
+publishable key. Among them: eight simultaneous callers racing for one seat, confirming a payment
+five times to prove one receipt, six simultaneous scans to prove a ticket boards once, two operators
+pressing Save on the same coach at the same instant, one operator trying to read a rival's manifest,
+revenue and fleet, a driver trying to rewrite the GPS trail they published, eight concurrent top-ups
+to prove no centavo is lost, a redeem/undo loop that must not inflate lifetime points, a panicking
+second press of the SOS button that must not raise a second emergency, and a passenger trying to add
+a bus to someone else's fleet.
+
+The last of those is a real hole this suite caught. So are the four in
+[docs/security-review.md](docs/security-review.md), which `pnpm db:verify:security` now guards —
+including an operator who could put a rival company's driver on their own bus.
 
 ## Project structure
 
@@ -204,6 +212,9 @@ decided by the server and never accepted from the client. See [docs/security.md]
 - [qr-flow.md](docs/qr-flow.md)
 - [realtime.md](docs/realtime.md)
 - [security.md](docs/security.md)
+- [testing.md](docs/testing.md) — the three levels, and which one actually proves what
+- [security-review.md](docs/security-review.md) — the Phase 13 review: four write paths
+  found and closed, what was assessed as adequate, and what was deliberately deferred
 - [test-accounts.md](docs/test-accounts.md) — seeded sign-in credentials for local testing
 - [testing.md](docs/testing.md)
 - [walkthrough.md](docs/walkthrough.md) — the prototype screen by screen, as each of

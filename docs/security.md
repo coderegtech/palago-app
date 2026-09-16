@@ -82,6 +82,20 @@ operator changes are all recorded in `audit_logs`.
 
 ## Attack surface checklist
 
-Carried forward to the Phase 13 review: double booking, duplicate payment confirmation, duplicate
-boarding, forged QR, cancelled-ticket scanning, unpaid-ticket scanning, expired payment, expired
-seat hold, unauthorised operator access, unauthorised location access, unauthorised SOS access.
+Worked through in the Phase 13 review — **[security-review.md](security-review.md)**, which found
+and closed four write paths: an operator could hard-delete a trip, could roster a rival operator's
+driver by writing `trip_assignments` directly, could thereby skip every validation in
+`assign_trip_crew`, and could rename a seat out from under a sold ticket.
+
+All four were the same mistake — a `FOR ALL` policy outliving the feature that needed it — so the
+rule is now: **a privileged operation is only as narrow as its narrowest path.** When a function
+becomes the front door, close the back door in the same migration, and say so in the policy rather
+than relying on a grant nobody can see.
+
+The list itself: double booking, duplicate payment confirmation, duplicate boarding, forged QR,
+cancelled-ticket scanning, unpaid-ticket scanning, expired payment, expired seat hold,
+unauthorised operator access, unauthorised location access, unauthorised SOS access. Each has
+checks in the verify suites that were run against violating data before being trusted.
+
+`pnpm db:verify:security` guards the review's findings; it failed five of its checks against the
+schema as it was.

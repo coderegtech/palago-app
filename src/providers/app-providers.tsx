@@ -3,6 +3,7 @@ import { DefaultTheme, ThemeProvider } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { AppErrorBoundary } from '@/components/common/error-boundary';
 import { ToastHost } from '@/components/ui/toast';
 import { NavigationColors } from '@/constants/theme';
 import { useAuthBootstrap } from '@/hooks/use-auth';
@@ -39,7 +40,12 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         <AuthBootstrap />
         <SafeAreaProvider>
           <ThemeProvider value={palagoNavigationTheme}>
-            {children}
+            {/*
+              Inside the providers, so the fallback can draw a real screen; around
+              the routes rather than around the whole tree, so a screen that throws
+              does not take the toast host or the theme down with it.
+            */}
+            <AppErrorBoundary>{children}</AppErrorBoundary>
             <ToastHost />
           </ThemeProvider>
         </SafeAreaProvider>

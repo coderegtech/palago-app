@@ -74,6 +74,31 @@ allowlist and do not match the baked-in `EXPO_PUBLIC_WEB_PAYMENT_BASE_URL`, so *
 payment QR codes only work correctly on the production URL** unless a preview hostname is added
 deliberately.
 
+## The database goes first, and there is a check for it
+
+```bash
+pnpm deploy:check
+```
+
+Refuses to ship a client the linked project cannot serve, and names the migrations that are missing.
+
+This is not hypothetical. Browser-verifying Phase 14 produced "Could not load trips" on every
+search. The client was right and the query was right — `trip_search` simply had no
+`operator_status` column on the hosted project, because `20260915000032` had never been applied
+there. `EXPO_PUBLIC_*` values are baked in at build time and the dev server reads `.env`, which
+points at the hosted project, so a schema three migrations behind looked exactly like a broken
+feature for a good while.
+
+The asymmetry is the whole rule. **A client ahead of its database fails closed** — it asks for a
+column by name, gets nothing, and takes the screen with it. **A database ahead of its client is
+harmless** — nothing reads the new column until the new build lands. So deploy in one order, every
+time: migrations, then functions, then the client.
+
+The more serious version of the same mistake: at the time of writing the linked project was also
+missing `20260916000033`, the Phase 13 write-scope fix — so production still allowed an operator to
+hard-delete a trip and to roster a rival company's driver. A security migration that was written,
+tested and never applied protects nobody.
+
 ## Backend deployment is separate
 
 Vercel deploys nothing in `supabase/`. When the schema or a function changes:

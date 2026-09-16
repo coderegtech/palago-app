@@ -72,10 +72,10 @@ Then, before declaring the phase done:
 | 9 | Mock wallet — balance, test top-ups, ledger, paying a booking | **Done** |
 | 10 | Loyalty — points earned for completed trips, rewards catalogue, redemption | **Done** |
 | 11 | SOS — emergency alerts, operator response workflow | **Done** |
-| 12 | Notifications | Next |
-| 13 | Security review | Not started |
-| 14 | Testing | Not started |
-| 15 | Production preparation | Not started |
+| 12 | Notifications | **Done** — in-app feed and realtime verified; push delivery to a handset unproven (needs a device) |
+| 13 | Security review | **Done** — four write paths found and closed, see [security-review.md](security-review.md) |
+| 14 | Testing | **Done** — 180 unit tests, 802 database checks, a coverage ratchet, and a scenario map in [testing.md](testing.md) |
+| 15 | Production preparation | **Partly done** — error monitoring, environment separation and deployment are in; performance and structured logging are not. See below |
 
 ## Invariants
 
@@ -410,7 +410,16 @@ concurrency and idempotency — the guarantees a passing happy-path test says no
 
 ### Phase 15 — Production preparation
 
-Performance, error monitoring, logging, environment separation, deployment.
+Performance, error monitoring, logging, environment separation, deployment. Three of the five are
+done; the other two are named here rather than quietly dropped.
+
+| Item | State |
+|---|---|
+| **Error monitoring** | **Done.** EAS Observe records startup, navigation and crash metrics; `AppErrorBoundary` catches render-phase errors with their component stack and shows a real screen instead of a white one. See [observability.md](observability.md). |
+| **Environment separation** | **Done.** `eas.json` links each build profile to an EAS environment; `scripts/check-build-env.mjs` fails a build whose variables are missing or point at localhost; `scripts/_verify-env.mjs` keeps the verify suites off any hosted project. |
+| **Deployment** | **Done.** `pnpm deploy:check` refuses to ship a client the target database cannot serve — see the Android and web halves of [deployment.md](deployment.md). |
+| **Performance** | **Not done.** The 5.6 MB web entry bundle is unsplit; `bus_locations` is append-only with no retention job (~1.3 GB/month at province-wide scale); and realtime fan-out from a 10-second GPS interval is the second-largest projected running cost. All three are sized in [production-costs.md](production-costs.md) §8. |
+| **Structured logging** | **Not done.** The Edge Functions `console.log`; nothing is correlated by request or aggregated. `Observe.logEvent` and `Observe.reportError` are installed and unused. |
 
 ## Deviations log
 
@@ -437,6 +446,9 @@ Scope moves between phases are recorded here rather than left implicit.
 | Wallet balance on the home screen | 9 | Phase 8's home screen said "wallet and rewards are not built yet"; half of that stopped being true |
 | SOS schema rewritten before it ever applied | 11 | The first cut referenced `trip_assignments.assigned_to` and an `audit_log_trigger()` that does not exist, so `db:reset` and `db:push` both failed outright. Rewritten to the conventions the other ten phases use — a real enum, bounded coordinates, `search_path = ''`, grants, no client write path — rather than patched to merely apply |
 | `cancel_sos` and `respond_sos` | 11 (added) | `SOSStatus` already carried RESPONDING and CANCELLED, and nothing set either. A status an enum promises and no code path reaches is a lie in the type |
+| Trip search status filter | 12 → 14 | The plan for `20260915000032` said `searchTrips` would filter on the new `operator_status` / `bus_status` / `route_status` / `is_active` columns. The migration shipped them and the client never used them, so a passenger could pick a departure on a withdrawn coach and only be refused at payment. Found while writing the tests that now guard it |
+| Performance and structured logging | 15 → deferred | Named in [production-costs.md](production-costs.md) §8 with the numbers behind them. Neither is a correctness risk; both are cost and operability |
+| Rate limiting | 13 → deferred | Assessed rather than built. The brute-force vectors are already closed by Supabase Auth's sign-in limit and a 256-bit payment token; what remains is resource abuse, which a Postgres counter does not solve and a CDN does. Recorded in [security-review.md](security-review.md) §3.1 |
 | Admin console | Unplanned, built on request | Not in the fifteen-phase plan. An ADMIN previously landed on the passenger home with no surface of their own, and reference data could only be added by editing `seed.sql`. Scope was held to analytics plus operators, terminals, routes and buses; trip scheduling stays with the operator console |
 
 ## Commands
