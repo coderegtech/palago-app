@@ -58,7 +58,7 @@ with server-side signature validation, wallet, loyalty, tracking, SOS, discounts
 | **No real payment gateway** | The largest single piece of remaining work. §4. |
 | **Test-mode notices are missing from passenger screens** | Only the counter screen warns. A receipt or wallet balance is visually indistinguishable from a real one — a legal problem the moment a stranger can reach it. |
 | **Push delivery unproven** | Tokens, triggers and the `send-push` function exist; nothing has been shown arriving on a handset. Needs a device and a development build. |
-| **No error monitoring or logging** | Nothing reports a crash. A production app without this is flying blind. |
+| **Error monitoring is half-wired** | EAS Observe reports startup, navigation and crash metrics (see [observability.md](observability.md)); `ObserveErrorBoundary` and `reportError` are installed and not yet used, and no metric has been seen arriving from a device. |
 | **No data retention job** | `bus_locations` is append-only and never pruned. §8 shows what that costs by scenario. |
 | **Phases 13–15 not started** | Security review, testing, production preparation — the project's own plan says so. |
 | **MapLibre has never run on hardware** | It typechecks against the real v11 API; that is not the same as working. |

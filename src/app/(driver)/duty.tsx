@@ -1,3 +1,4 @@
+import { ObserveInteractiveMarker } from 'expo-observe';
 import { router } from 'expo-router';
 import { ChevronRight, Clock, Users } from 'lucide-react-native';
 import { FlatList, Pressable, View } from 'react-native';
@@ -81,6 +82,8 @@ export default function DutyScreen() {
 
   return (
     <Screen padded={false}>
+      {/* Crew land here on a cold start; TTI is when the roster is on screen. */}
+      {!assignments.isPending && <ObserveInteractiveMarker />}
       <FlatList
         data={assignments.data ?? []}
         keyExtractor={(item) => item.assignmentId}

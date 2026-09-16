@@ -1,4 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { ObserveInteractiveMarker } from "expo-observe";
 import { Link, router } from "expo-router";
 import { Eye, EyeOff } from "lucide-react-native";
 import { useState } from "react";
@@ -41,6 +42,8 @@ export default function LoginScreen() {
 
   return (
     <Screen scroll>
+      {/* Nothing to fetch: the form is usable the moment it renders. */}
+      <ObserveInteractiveMarker />
       <BrandHero
         title="Welcome back"
         subtitle="Sign in to book your next trip."

@@ -114,6 +114,13 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
   `email_change_token_new`/`email_change` set to `''` and a matching `auth.identities` row, or
   sign-in fails with the misleading "Database error querying schema". See docs/database.md.
 - Guards (`AuthGate`) are navigation only. Data access is enforced by RLS — see docs/auth.md.
+- **Observe is configured at module scope, and its param filter is a privacy control.**
+  `useObserve()` asserts the router integration does not toggle during a screen's lifecycle, so
+  `Observe.configure(...)` runs when `src/lib/observe.ts` is imported by the root layout — never in
+  an effect. Its `filteredParams` list keeps `reference`, `id`, `bookingId`, `paymentId`, `tripId`
+  and `operator` out of exported navigation metrics; `reference` is the value inside every payment
+  QR code and `/payment/[reference]` is public, so a leaked one is a leaked payment page. Add a new
+  `[dynamic]` route, decide about its parameter. See docs/observability.md.
 - **MapLibre is native-only.** No Expo Go, no react-native-web. Keep the `map.tsx` / `map.web.tsx`
   split — importing MapLibre into the web bundle breaks the public payment page. See docs/realtime.md.
 - **react-native-svg: use `transform="translate(x y)"`, not `translateX`/`translateY` props.** Those

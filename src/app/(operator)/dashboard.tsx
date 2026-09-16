@@ -1,3 +1,4 @@
+import { ObserveInteractiveMarker } from 'expo-observe';
 import {
   Bus as BusIcon,
   CalendarDays,
@@ -381,6 +382,8 @@ export default function OperatorDashboardScreen() {
           title={`${greeting()}, Operator`}
           subtitle={`${profile?.fullName ?? ''} · ${formatDateShort(today)}`}
         />
+        {/* An operator lands here on a cold start; TTI is when the figures resolve. */}
+        {!dashboard.isPending && <ObserveInteractiveMarker />}
 
         {dashboard.isPending ? (
           <View className="gap-3">

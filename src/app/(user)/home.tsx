@@ -1,3 +1,4 @@
+import { ObserveInteractiveMarker } from 'expo-observe';
 import { router } from 'expo-router';
 import { Pressable, ScrollView, View } from 'react-native';
 import {
@@ -150,6 +151,12 @@ export default function HomeScreen() {
   return (
     <Screen padded={false}>
       <ScrollView contentContainerClassName="px-4 pb-8 gap-4" showsVerticalScrollIndicator={false}>
+        {/*
+          The screen most cold starts land on. Bookings are the thing a
+          passenger opens the app for, so TTI is when those have arrived —
+          the wallet and loyalty tiles fill in beside them.
+        */}
+        {!bookings.isPending && <ObserveInteractiveMarker />}
         <View className="flex-row items-center justify-between pt-2">
           <PalaGoLogo size="md" />
           <View>

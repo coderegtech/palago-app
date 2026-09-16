@@ -194,6 +194,8 @@ decided by the server and never accepted from the client. See [docs/security.md]
 - [deployment.md](docs/deployment.md) — the web build on Vercel, and what it does *not* deploy
 - [management.md](docs/management.md) — the admin → operator → crew hierarchy, the two staff
   statuses, and how a bus is stopped from being in two places at once
+- [observability.md](docs/observability.md) — EAS Observe: startup and navigation
+  metrics, and the route parameters deliberately kept out of them
 - [payment-flow.md](docs/payment-flow.md)
 - [phases.md](docs/phases.md) — the phased build process, gates and invariants
 - [production-costs.md](docs/production-costs.md) — assumptions and cost ranges for taking this to
