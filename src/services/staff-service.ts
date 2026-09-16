@@ -100,7 +100,7 @@ export interface ProvisionedAccount {
 export interface CreateStaffInput {
   email: string;
   fullName: string;
-  role: Extract<UserRole, 'OPERATOR' | 'DRIVER' | 'ASSISTANT'>;
+  role: Extract<UserRole, 'OPERATOR_ADMIN' | 'DRIVER' | 'CREW'>;
   operatorId: UUID;
   phone?: string;
   licenseNumber?: string;

@@ -2748,7 +2748,7 @@ export type Database = {
         | "ARRIVED"
         | "COMPLETED"
         | "CANCELLED"
-      user_role: "USER" | "OPERATOR" | "DRIVER" | "ASSISTANT" | "ADMIN"
+      user_role: "USER" | "OPERATOR_ADMIN" | "DRIVER" | "CREW" | "SUPER_ADMIN"
       wallet_transaction_type:
         | "TOP_UP"
         | "BOOKING_PAYMENT"
@@ -2971,7 +2971,7 @@ export const Constants = {
         "COMPLETED",
         "CANCELLED",
       ],
-      user_role: ["USER", "OPERATOR", "DRIVER", "ASSISTANT", "ADMIN"],
+      user_role: ["USER", "OPERATOR_ADMIN", "DRIVER", "CREW", "SUPER_ADMIN"],
       wallet_transaction_type: [
         "TOP_UP",
         "BOOKING_PAYMENT",

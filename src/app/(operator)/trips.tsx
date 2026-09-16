@@ -76,7 +76,7 @@ export default function OperatorTripsScreen() {
   const routes = useOperatorRoutes();
   const buses = useBuses();
   const drivers = useCrew(CrewKind.DRIVER);
-  const assistants = useCrew(CrewKind.ASSISTANT);
+  const assistants = useCrew(CrewKind.CREW);
   const turnaround = useTurnaroundMinutes();
   const showToast = useUIStore((state) => state.showToast);
 
@@ -549,7 +549,7 @@ export default function OperatorTripsScreen() {
             label="Conductor"
             placeholder="Nobody"
             value={crewDraft.assistantId}
-            options={rosterable(CrewKind.ASSISTANT)}
+            options={rosterable(CrewKind.CREW)}
             onChange={(assistantId) => setCrewDraft((d) => ({ ...d, assistantId }))}
           />
 

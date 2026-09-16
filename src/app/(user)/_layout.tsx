@@ -23,7 +23,7 @@ import { Colors } from '@/constants/theme';
  */
 export default function UserLayout() {
   return (
-    <AuthGate allow={[UserRole.USER, UserRole.ADMIN]}>
+    <AuthGate allow={[UserRole.USER, UserRole.SUPER_ADMIN]}>
       <Tabs
       screenOptions={{
         headerShown: false,

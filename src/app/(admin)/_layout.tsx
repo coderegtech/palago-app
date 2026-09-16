@@ -165,7 +165,7 @@ export default function AdminLayout() {
   const isDesktop = useIsDesktop();
 
   return (
-    <AuthGate allow={[UserRole.ADMIN]}>
+    <AuthGate allow={[UserRole.SUPER_ADMIN]}>
       <SafeAreaView className="flex-1 bg-background" edges={isDesktop ? ['top'] : ['top', 'bottom']}>
         <View className={cn('flex-1', isDesktop && 'flex-row')}>
           {isDesktop ? <Sidebar /> : null}

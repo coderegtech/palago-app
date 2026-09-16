@@ -13,7 +13,7 @@ import { CrewKind } from '@/constants/enums';
 export default function CrewScreen() {
   return (
     <CrewManagement
-      kind={CrewKind.ASSISTANT}
+      kind={CrewKind.CREW}
       title="Crew"
       subtitle="Conductors and assistants"
       fallbackHref="/(operator)/dashboard"

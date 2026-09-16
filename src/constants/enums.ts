@@ -6,12 +6,31 @@
  * the client can never drift apart. Never inline these strings at a call site.
  */
 
+/**
+ * Who someone is, and therefore what the server will let them do.
+ *
+ * The names say what each role is responsible for:
+ *
+ *   SUPER_ADMIN    runs the platform. Creates and manages the operators, sees
+ *                  every company's data, and deliberately does NOT schedule
+ *                  departures or roster crew — that is operational work and it
+ *                  belongs to the company doing the operating.
+ *   OPERATOR_ADMIN runs one bus company: its buses, its drivers, its crew, its
+ *                  schedules, its reservations. Never another company's.
+ *   DRIVER / CREW  ride the bus. They see their own roster and set their own
+ *                  availability; they manage nobody.
+ *   USER           a passenger.
+ *
+ * These are navigation and display only. Authorisation is the database's —
+ * every one of these names appears in RLS policies and SECURITY DEFINER
+ * functions, which is what actually decides. See docs/management.md.
+ */
 export const UserRole = {
   USER: 'USER',
-  OPERATOR: 'OPERATOR',
+  OPERATOR_ADMIN: 'OPERATOR_ADMIN',
   DRIVER: 'DRIVER',
-  ASSISTANT: 'ASSISTANT',
-  ADMIN: 'ADMIN',
+  CREW: 'CREW',
+  SUPER_ADMIN: 'SUPER_ADMIN',
 } as const;
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
@@ -157,10 +176,17 @@ export const AvailabilityStatus = {
 } as const;
 export type AvailabilityStatus = (typeof AvailabilityStatus)[keyof typeof AvailabilityStatus];
 
-/** DRIVER or ASSISTANT, for the functions that take either. */
+/**
+ * Which kind of crew member, for the functions that take either.
+ *
+ * `CREW` is the role's name and the vocabulary the console uses. The table it
+ * writes to is still `assistants` — renaming a table that a dozen policies and
+ * eight verify suites join against would buy nothing — so the SQL functions
+ * accept both spellings and normalise. See 20260916000034_role_hierarchy.sql.
+ */
 export const CrewKind = {
   DRIVER: 'DRIVER',
-  ASSISTANT: 'ASSISTANT',
+  CREW: 'CREW',
 } as const;
 export type CrewKind = (typeof CrewKind)[keyof typeof CrewKind];
 

@@ -52,7 +52,7 @@ export function useActiveDiscount() {
 /** The operator's review queue. */
 export function usePendingDiscountReviews() {
   const { role } = useAuth();
-  const canReview = role === 'OPERATOR' || role === 'ADMIN';
+  const canReview = role === 'OPERATOR_ADMIN' || role === 'SUPER_ADMIN';
 
   return useQuery<DiscountEligibility[]>({
     queryKey: discountKeys.pending(),

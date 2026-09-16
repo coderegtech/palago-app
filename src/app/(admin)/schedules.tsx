@@ -68,7 +68,7 @@ export default function AdminSchedulesScreen() {
   const routes = useAdminRoutes();
   const buses = useAdminBuses();
   const drivers = useCrew(CrewKind.DRIVER);
-  const assistants = useCrew(CrewKind.ASSISTANT);
+  const assistants = useCrew(CrewKind.CREW);
   const turnaround = useTurnaroundMinutes();
   const showToast = useUIStore((state) => state.showToast);
 
@@ -532,7 +532,7 @@ export default function AdminSchedulesScreen() {
             label="Conductor"
             placeholder="Nobody"
             value={crewDraft.assistantId}
-            options={rosterable(CrewKind.ASSISTANT, crewFor?.operator_id)}
+            options={rosterable(CrewKind.CREW, crewFor?.operator_id)}
             onChange={(assistantId) => setCrewDraft((d) => ({ ...d, assistantId }))}
           />
           <Button

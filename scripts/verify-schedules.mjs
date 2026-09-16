@@ -394,7 +394,7 @@ const { data: crew } = await cherry.supabase
   .order('name');
 
 const aDriver = crew.find((c) => c.crew_kind === 'DRIVER');
-const anAssistant = crew.find((c) => c.crew_kind === 'ASSISTANT');
+const anAssistant = crew.find((c) => c.crew_kind === 'CREW');
 
 const tripOne = first.data.id;
 const tripTwo = otherBus.data.id;
