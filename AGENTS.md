@@ -114,6 +114,12 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
   `email_change_token_new`/`email_change` set to `''` and a matching `auth.identities` row, or
   sign-in fails with the misleading "Database error querying schema". See docs/database.md.
 - Guards (`AuthGate`) are navigation only. Data access is enforced by RLS — see docs/auth.md.
+- **The database goes first, and `pnpm deploy:check` enforces it.** A client ahead of its schema
+  fails closed: it asks PostgREST for a column by name, gets an error, and takes the screen with
+  it. A database ahead of its client is harmless. Phase 14's browser verification spent a while
+  chasing "Could not load trips" that was `trip_search` missing `operator_status` on the hosted
+  project — `.env` points there, so the dev server was talking to a schema three migrations
+  behind. Deploy migrations, then functions, then the client.
 - **A `FOR ALL` policy outlives the feature that needed it, and `ALL` includes `DELETE`.** Phase 13
   found four write paths this way, all the same mistake: a later migration introduces a
   SECURITY DEFINER function as the authorised path, revokes the grants it remembers, and leaves the

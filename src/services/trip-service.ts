@@ -76,7 +76,8 @@ const SEARCH_COLUMNS =
   'operator_id, operator_name, operator_code, duration_minutes, distance_km, ' +
   'origin_terminal_id, origin_name, origin_code, ' +
   'destination_terminal_id, destination_name, destination_code, ' +
-  'bus_id, bus_number, bus_type, capacity, available_seats';
+  'bus_id, bus_number, bus_type, capacity, available_seats, ' +
+  'is_active, operator_status, route_status, bus_status';
 
 type TripSearchRow = {
   id: string;
@@ -194,7 +195,20 @@ export const tripService = {
       .eq('departure_date', input.departureDate)
       .in('status', ['SCHEDULED', 'BOARDING'])
       // A trip that cannot seat the whole party is not a result.
-      .gte('available_seats', input.passengers);
+      .gte('available_seats', input.passengers)
+      // Withdrawn from sale, but still a real trip. `create_booking` refuses
+      // all four of these with INACTIVE_RESOURCE, so without them here a
+      // passenger picks a departure, names their fellow travellers and is
+      // turned away at the payment step for a reason they were never shown.
+      // The enforcement is the server's; this is only about not offering
+      // something that cannot be sold.
+      //
+      // `getTrip` deliberately does NOT filter: somebody holding a ticket on a
+      // coach that has since been withdrawn must still be able to open it.
+      .eq('is_active', true)
+      .eq('operator_status', 'ACTIVE')
+      .eq('route_status', 'ACTIVE')
+      .eq('bus_status', 'ACTIVE');
 
     if (filters.operatorCode) query = query.eq('operator_code', filters.operatorCode);
     if (filters.busType) query = query.eq('bus_type', filters.busType);
