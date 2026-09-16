@@ -356,7 +356,8 @@ function ManagementLink({ label, hint, icon, href }: ManagementLinkProps) {
       accessibilityLabel={`${label}: ${hint}`}
       onPress={() => router.push(href)}
       className="min-w-[30%] flex-1">
-      <Card className="h-full gap-2 active:bg-primary-soft">
+      {/* flex-1, not h-full — see the note in (user)/home.tsx. */}
+      <Card className="flex-1 gap-2 active:bg-primary-soft">
         <View className="h-9 w-9 items-center justify-center rounded-full bg-primary-soft">
           {icon}
         </View>
