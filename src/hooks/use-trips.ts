@@ -3,11 +3,13 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
 import { bookingService, type ReservationResult } from '@/services/booking-service';
 import { tripService, type TripFilters } from '@/services/trip-service';
 import type { PassengerDetailInput, TripSearchInput } from '@/schemas/booking';
 import type { UUID } from '@/types/models';
+import { addDaysISO, formatDateShort, todayISO } from '@/utils/datetime';
 
 export const tripKeys = {
   operators: ['operators'] as const,
@@ -133,4 +135,21 @@ export function useCancelBooking() {
       queryClient.invalidateQueries({ queryKey: ['trips'] });
     },
   });
+}
+
+/**
+ * The next seven days, as pickable chips.
+ *
+ * Shared by the passenger search and the operator's counter sale so the two
+ * offer the same window — a clerk who can sell a week ahead and a passenger who
+ * can only book three days out would be a difference nobody decided on.
+ */
+export function useDateOptions() {
+  return useMemo(() => {
+    const today = todayISO();
+    return Array.from({ length: 7 }, (_, i) => {
+      const date = addDaysISO(today, i);
+      return { date, label: i === 0 ? 'Today' : formatDateShort(date) };
+    });
+  }, []);
 }

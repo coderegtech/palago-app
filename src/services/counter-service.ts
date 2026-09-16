@@ -36,17 +36,33 @@ export type BookingSource = 'MOBILE_APP' | 'WEB' | 'OPERATOR' | 'TERMINAL';
  * and is theirs to spend, so the server refuses it here. A passenger pays from
  * their own wallet, signed in as themselves.
  */
+/**
+ * What the clerk sees, and what it actually is.
+ *
+ * The labels are the real-world names a passenger would say out loud — nobody
+ * at a counter asks to pay by "Test GCash". `real` is what decides behaviour,
+ * and only CASH is true: everything else is simulated and moves no money.
+ *
+ * That distinction is NOT left to the label. Choosing a simulated method raises
+ * "TEST PAYMENT — NO REAL MONEY WILL BE CHARGED" on the screen before the clerk
+ * can confirm, and CASH raises a different warning naming the amount, because
+ * the tap is the record that notes changed hands. Removing either of those
+ * warnings is what would make a simulated receipt indistinguishable from a real
+ * one — the names alone never were the safeguard.
+ */
 export const COUNTER_METHODS: { value: PaymentMethod; label: string; real: boolean }[] = [
   { value: 'CASH', label: 'Cash', real: true },
-  { value: 'TEST_GCASH', label: 'Test GCash', real: false },
-  { value: 'TEST_MAYA', label: 'Test Maya', real: false },
-  { value: 'TEST_CARD', label: 'Test card', real: false },
-  { value: 'TEST_BANK', label: 'Test bank transfer', real: false },
+  { value: 'TEST_GCASH', label: 'GCash', real: false },
+  { value: 'TEST_MAYA', label: 'Maya', real: false },
+  { value: 'TEST_CARD', label: 'Card', real: false },
+  { value: 'TEST_BANK', label: 'Bank transfer', real: false },
 ];
 
 export interface CounterPassengerInput {
   name: string;
   phone?: string;
+  /** Optional, like the app's own form. `create_booking` already stores it. */
+  email?: string;
   type: PassengerType;
 }
 
@@ -108,7 +124,9 @@ export const counterService = {
       p_passengers: input.passengers.map((p) => ({
         name: p.name.trim(),
         phone: p.phone?.trim() || null,
-        email: null,
+        // Was hard-coded null while the counter form had no email field. It has
+        // one now — the app's own — and `create_booking` has always read this key.
+        email: p.email?.trim() || null,
         type: p.type,
       })),
       p_seat_ids: input.seatIds,

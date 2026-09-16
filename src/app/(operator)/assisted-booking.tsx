@@ -17,9 +17,12 @@
  */
 
 import { useMemo, useState } from 'react';
+import { useFieldArray, useForm, useWatch } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { View } from 'react-native';
 import { Banknote, CircleCheck, Printer, Ticket } from 'lucide-react-native';
 
+import { PassengerFields } from '@/components/booking/passenger-fields';
 import { SeatMap } from '@/components/booking/seat-map';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -27,7 +30,6 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Divider } from '@/components/ui/divider';
 import { Header } from '@/components/ui/header';
-import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { Screen } from '@/components/ui/screen';
 import { Select } from '@/components/ui/select';
@@ -35,6 +37,7 @@ import { EmptyState, ErrorState, Loading } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
 import { BoardingPass } from '@/components/payment/boarding-pass';
 import { PassengerType } from '@/constants/enums';
+import { passengersFormSchema, type PassengersFormInput } from '@/schemas/booking';
 import { Colors } from '@/constants/theme';
 import { useBoardingPass } from '@/hooks/use-boarding';
 import {
@@ -43,7 +46,7 @@ import {
   useTakeCounterPayment,
 } from '@/hooks/use-counter';
 import { useOperatorTrips } from '@/hooks/use-operator';
-import { useTripSeats } from '@/hooks/use-trips';
+import { useDateOptions, useTerminals, useTripSeats } from '@/hooks/use-trips';
 import { AppError } from '@/lib/errors';
 import { COUNTER_METHODS, type PaymentMethod } from '@/services/counter-service';
 import { qrService } from '@/services/qr-service';
@@ -51,14 +54,6 @@ import type { TripSeatView } from '@/services/trip-service';
 import type { TripOverview } from '@/services/operator-service';
 import { formatDateShort, formatTime, todayISO } from '@/utils/datetime';
 import { formatMoney } from '@/utils/money';
-
-const PASSENGER_TYPES = [
-  { value: PassengerType.ADULT, label: 'Adult' },
-  { value: PassengerType.CHILD, label: 'Child' },
-  { value: PassengerType.SENIOR, label: 'Senior' },
-  { value: PassengerType.STUDENT, label: 'Student' },
-  { value: PassengerType.PWD, label: 'PWD' },
-];
 
 interface Traveller {
   name: string;
@@ -69,10 +64,33 @@ interface Traveller {
 const blankTraveller = (): Traveller => ({ name: '', phone: '', type: PassengerType.ADULT });
 
 export default function AssistedBookingScreen() {
-  const trips = useOperatorTrips(todayISO());
+  // Same three questions the passenger search asks, in the same order. The
+  // source is still `operator_trip_overview`, which is scoped to this operator
+  // inside the view — a clerk can only ever sell a seat on their own company's
+  // coach, whatever they pick here.
+  const dateOptions = useDateOptions();
+  const terminals = useTerminals();
+  const [date, setDate] = useState(todayISO());
+  const [origin, setOrigin] = useState<string | null>(null);
+  const [destination, setDestination] = useState<string | null>(null);
+  const trips = useOperatorTrips(date);
 
   const [trip, setTrip] = useState<TripOverview | null>(null);
-  const [travellers, setTravellers] = useState<Traveller[]>([blankTraveller()]);
+  // The passenger app's own form, schema and all. A clerk gets the same fields,
+  // the same optional markers and the same validation, and a rule that changes
+  // in `passengerDetailSchema` changes here without anyone remembering to.
+  const form = useForm<PassengersFormInput>({
+    resolver: zodResolver(passengersFormSchema),
+    mode: 'onTouched',
+    defaultValues: { passengers: [blankTraveller()] },
+  });
+  const { control, reset: resetForm } = form;
+  const { fields, append, remove } = useFieldArray({ control, name: 'passengers' });
+  // `useWatch`, not `watch`: the latter returns a new function identity on every
+  // render, which the React Compiler refuses to compile around ("Use of
+  // incompatible library") and which the hooks lint rule flags as unmemoizable.
+  // Same reason the passenger type uses a Controller rather than watch/setValue.
+  const travellers = useWatch({ control, name: 'passengers' }) ?? [];
   const [seats, setSeats] = useState<TripSeatView[]>([]);
   const [method, setMethod] = useState<PaymentMethod | null>(null);
   const [confirmingCash, setConfirmingCash] = useState(false);
@@ -91,7 +109,7 @@ export default function AssistedBookingScreen() {
 
   function reset() {
     setTrip(null);
-    setTravellers([blankTraveller()]);
+    resetForm({ passengers: [blankTraveller()] });
     setSeats([]);
     setMethod(null);
     setSold(null);
@@ -117,7 +135,12 @@ export default function AssistedBookingScreen() {
     sell.mutate(
       {
         tripId: trip.id,
-        passengers: named.map((t) => ({ name: t.name, phone: t.phone, type: t.type })),
+        passengers: named.map((t) => ({
+          name: t.name,
+          phone: t.phone,
+          email: t.email,
+          type: t.type,
+        })),
         seatIds: seats.map((s) => s.seatId),
         source: 'OPERATOR',
       },
@@ -193,21 +216,85 @@ export default function AssistedBookingScreen() {
   // -------------------------------------------------------------------------
   if (!trip) {
     const sellable = (trips.data ?? []).filter(
-      (t) => (t.status === 'SCHEDULED' || t.status === 'BOARDING') && t.seatsAvailable > 0,
+      (t) =>
+        (t.status === 'SCHEDULED' || t.status === 'BOARDING') &&
+        t.seatsAvailable > 0 &&
+        (!origin || t.originCode === origin) &&
+        (!destination || t.destinationCode === destination),
     );
+
+    const terminalOptions = (terminals.data ?? []).map((terminal) => ({
+      value: terminal.code,
+      label: `${terminal.name} (${terminal.code})`,
+    }));
 
     return (
       <Screen scroll>
         <Header title="Counter sale" subtitle="Choose the trip the passenger is travelling on" />
 
+        {/*
+          The passenger search's own shape — origin, destination, date — so a
+          clerk who has used the app already knows this screen. The results
+          below are this operator's trips for the chosen day, narrowed by route.
+        */}
+        <Card className="gap-3">
+          <Select
+            label="From"
+            placeholder="Any origin"
+            value={origin}
+            options={terminalOptions}
+            onChange={setOrigin}
+          />
+          <Select
+            label="To"
+            placeholder="Any destination"
+            value={destination}
+            options={terminalOptions}
+            onChange={setDestination}
+          />
+
+          <View className="gap-2">
+            <Text variant="label" tone="muted">
+              Travel date
+            </Text>
+            <View className="flex-row flex-wrap gap-2">
+              {dateOptions.map((option) => {
+                const selected = option.date === date;
+                return (
+                  <Button
+                    key={option.date}
+                    label={option.label}
+                    size="sm"
+                    variant={selected ? 'primary' : 'outline'}
+                    onPress={() => setDate(option.date)}
+                    accessibilityLabel={`Travel on ${option.label}${selected ? ', selected' : ''}`}
+                  />
+                );
+              })}
+            </View>
+          </View>
+
+          {origin || destination ? (
+            <Button
+              label="Clear route"
+              size="sm"
+              variant="ghost"
+              onPress={() => {
+                setOrigin(null);
+                setDestination(null);
+              }}
+            />
+          ) : null}
+        </Card>
+
         {trips.isPending ? (
-          <Loading label="Loading today's trips…" />
+          <Loading label="Loading trips…" />
         ) : trips.isError ? (
-          <ErrorState message="Could not load today's trips." onRetry={() => trips.refetch()} />
+          <ErrorState message="Could not load trips." onRetry={() => trips.refetch()} />
         ) : sellable.length === 0 ? (
           <EmptyState
-            title="Nothing to sell today"
-            message="Trips appear here while they still have seats and have not departed."
+            title={origin || destination ? 'Nothing on that route' : 'Nothing to sell that day'}
+            message="Trips appear here while they still have seats and have not departed. Try another date or clear the route."
           />
         ) : (
           <View className="gap-3">
@@ -266,55 +353,35 @@ export default function AssistedBookingScreen() {
               label="−"
               variant="outline"
               size="sm"
-              disabled={travellers.length <= 1}
+              disabled={fields.length <= 1}
               accessibilityLabel="One passenger fewer"
               onPress={() => {
-                setTravellers((t) => t.slice(0, -1));
-                setSeats((s) => s.slice(0, travellers.length - 1));
+                remove(fields.length - 1);
+                setSeats((s) => s.slice(0, fields.length - 1));
               }}
             />
             <Button
               label="+"
               variant="outline"
               size="sm"
-              disabled={travellers.length >= 5 || travellers.length >= trip.seatsAvailable}
+              disabled={fields.length >= 5 || fields.length >= trip.seatsAvailable}
               accessibilityLabel="One passenger more"
-              onPress={() => setTravellers((t) => [...t, blankTraveller()])}
+              onPress={() => append(blankTraveller())}
             />
           </View>
         </View>
 
-        {travellers.map((traveller, index) => (
-          <View key={index} className="gap-2">
-            {index > 0 ? <Divider /> : null}
-            <Input
-              label={`Passenger ${index + 1} — full name`}
-              placeholder="Juan Dela Cruz"
-              value={traveller.name}
-              autoCapitalize="words"
-              onChangeText={(name) =>
-                setTravellers((all) => all.map((t, i) => (i === index ? { ...t, name } : t)))
-              }
-            />
-            <Input
-              label="Mobile number (optional)"
-              placeholder="0917 123 4567"
-              keyboardType="phone-pad"
-              value={traveller.phone}
-              onChangeText={(phone) =>
-                setTravellers((all) => all.map((t, i) => (i === index ? { ...t, phone } : t)))
-              }
-            />
-            <Select
-              label="Passenger type"
-              value={traveller.type}
-              options={PASSENGER_TYPES}
-              onChange={(type) =>
-                setTravellers((all) => all.map((t, i) => (i === index ? { ...t, type } : t)))
-              }
-            />
-          </View>
-        ))}
+        {/*
+          The passenger app's own card, not a counter-shaped copy of it. Same
+          fields, same order, same labels, same validation — see
+          components/booking/passenger-fields.tsx.
+        */}
+        <View className="gap-4">
+          {fields.map((field, index) => (
+            <PassengerFields key={field.id} control={control} index={index} />
+          ))}
+        </View>
+
 
         <Text variant="caption" tone="muted">
           A discounted fare needs an approved ID on a PalaGo account, so a counter sale is charged

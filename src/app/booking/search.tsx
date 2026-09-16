@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { FlatList, Pressable, View } from 'react-native';
 import { ArrowUpDown, Minus, Plus, SlidersHorizontal, X } from 'lucide-react-native';
 
@@ -16,22 +16,11 @@ import { Text } from '@/components/ui/text';
 import { MAX_PASSENGERS_PER_BOOKING } from '@/constants/config';
 import { BusType } from '@/constants/enums';
 import { Colors } from '@/constants/theme';
-import { useOperators, useTerminals, useTripSearch } from '@/hooks/use-trips';
+import { useDateOptions, useOperators, useTerminals, useTripSearch } from '@/hooks/use-trips';
 import { useBookingStore } from '@/stores/booking-store';
 import { tripSearchSchema, type TripSearchInput } from '@/schemas/booking';
 import type { TripFilters, TripSearchResult } from '@/services/trip-service';
-import { addDaysISO, formatDateShort, todayISO } from '@/utils/datetime';
-
-/** The next seven days, as pickable chips. */
-function useDateOptions() {
-  return useMemo(() => {
-    const today = todayISO();
-    return Array.from({ length: 7 }, (_, i) => {
-      const date = addDaysISO(today, i);
-      return { date, label: i === 0 ? 'Today' : formatDateShort(date) };
-    });
-  }, []);
-}
+import { formatDateShort } from '@/utils/datetime';
 
 export default function BookingSearchScreen() {
   // Arrives set when the user tapped an operator card on the home screen.
