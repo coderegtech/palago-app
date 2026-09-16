@@ -55,6 +55,15 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
   `src/app/_layout.tsx` — the public `/payment/[reference]` page renders in that same tree in a
   logged-out browser. Gate inside `(user)` / `(operator)` instead.
 - **`app.json` keeps `web.output: "single"`**, or deep-linked payment references 404.
+- **An EAS build gets no `.env`, and the app dies silently without one.** `.gitignore` ignores
+  `.env*` and EAS uploads only what git tracks, so every `EXPO_PUBLIC_*` value inlines as
+  `undefined` unless `eas.json` supplies it. `src/lib/env.ts` then throws during module evaluation —
+  the root layout reaches it through `AppProviders` → `useAuthBootstrap` → `@/lib/supabase` — which
+  is before React renders and before any error boundary exists, so a release APK shows the splash
+  and exits with no message at all. The throw is right; the invisibility was the bug.
+  `scripts/check-build-env.mjs` runs as `eas-build-pre-install` and fails the build instead, and it
+  also rejects a localhost URL, because `127.0.0.1` inside an APK is the phone. `adb logcat` is the
+  first command for any silent exit. See docs/deployment.md → Android builds.
 - **pnpm + Metro**: `.npmrc` public-hoists `react-native-css-interop`. Removing it breaks the bundle
   with "Unable to resolve react-native-css-interop/jsx-runtime".
 - **ESLint must stay on v9.** v10 breaks `eslint-plugin-react` as bundled by `eslint-config-expo`.
