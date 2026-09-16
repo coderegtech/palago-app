@@ -177,6 +177,51 @@ alter table public.trips
 -- cancelling one — so neither is in the constraint.
 -- ---------------------------------------------------------------------------
 
+-- Before the constraint: does the data already break it?
+--
+-- On a fresh database it cannot. On one with history it can, and Postgres
+-- reports that as a bare `23P01` naming two UUIDs and two timestamp ranges,
+-- which tells whoever is running the migration almost nothing. This says which
+-- departures clash and what to do about it.
+--
+-- It refuses rather than resolving. Fixing a bus overlap means cancelling or
+-- moving a trip; cancelling one cancels every booking on it, releases the
+-- seats and tells the passengers. That is a decision with people attached, and
+-- a migration is not the place to make it.
+do $preflight$
+declare
+  v_clashes text;
+begin
+  select string_agg(
+           format('%s (%s–%s) and %s (%s–%s), both on coach %s',
+                  a.trip_number, a.departure_at, a.arrival_at,
+                  b.trip_number, b.departure_at, b.arrival_at,
+                  bus.bus_number),
+           chr(10) || '  '
+           order by a.departure_at
+         )
+    into v_clashes
+    from public.trips a
+    join public.trips b on b.bus_id = a.bus_id and b.id > a.id
+    join public.buses bus on bus.id = a.bus_id
+   where a.status <> 'CANCELLED' and a.is_active
+     and b.status <> 'CANCELLED' and b.is_active
+     and a.blocked_range && b.blocked_range;
+
+  if v_clashes is not null then
+    raise exception 'SCHEDULE_CONFLICT_IN_EXISTING_DATA'
+      using
+        detail = 'These departures already share a coach at the same time:'
+                 || chr(10) || '  ' || v_clashes,
+        hint = 'Cancel or re-time one of each pair, then run the migration again. '
+               || 'Note the turnaround buffer: a coach is spoken for '
+               || public.turnaround_minutes()::text
+               || ' minutes after it arrives, so two trips can clash even when their '
+               || 'journeys do not overlap.';
+  end if;
+end
+$preflight$;
+
 alter table public.trips
   add constraint trips_bus_no_overlap
   exclude using gist (bus_id with =, blocked_range with &&)
@@ -248,6 +293,89 @@ update public.trip_assignments ta
  where t.id = ta.trip_id;
 
 alter table public.trip_assignments alter column blocked_range set not null;
+
+-- Crew already double-booked, stood down before the constraint goes on.
+--
+-- Unlike a bus overlap this IS resolved here, because the two are not
+-- comparable. Cancelling a trip cancels bookings and tells passengers; standing
+-- down a crew assignment moves nobody's money and nobody's seat. It is also
+-- recoverable in one action, and visible without looking for it — the schedule
+-- screen shows an uncrewed departure as "No driver" in red.
+--
+-- Nothing is deleted: the row is set CANCELLED, which is exactly what
+-- `assign_trip_crew` does when it supersedes one, and every change is written
+-- to `audit_logs` so it can be read back.
+--
+-- Who loses, in order:
+--   1. an ASSIGNED row loses to an ACTIVE one — you cannot un-crew a bus that
+--      is already moving;
+--   2. otherwise the later departure loses, because the driver is physically
+--      on the earlier one first;
+--   3. ties go to the lower id, so two runs of this migration on the same data
+--      make the same choice.
+--
+-- The loop cancels one row per pass and the candidate set strictly shrinks, so
+-- a chain of three overlapping assignments resolves down to one.
+do $preflight$
+declare
+  v_loser uuid;
+  v_kept text;
+  v_dropped text;
+  v_count integer := 0;
+begin
+  loop
+    select loser.id,
+           lt.trip_number,
+           wt.trip_number
+      into v_loser, v_dropped, v_kept
+      from public.trip_assignments loser
+      join public.trips lt on lt.id = loser.trip_id
+      join public.trip_assignments winner on winner.id <> loser.id
+      join public.trips wt on wt.id = winner.trip_id
+     where loser.status in ('ASSIGNED', 'ACTIVE')
+       and winner.status in ('ASSIGNED', 'ACTIVE')
+       and loser.blocked_range && winner.blocked_range
+       and (
+         (loser.driver_id is not null and loser.driver_id = winner.driver_id)
+         or (loser.assistant_id is not null and loser.assistant_id = winner.assistant_id)
+       )
+       and (
+         (winner.status = 'ACTIVE' and loser.status = 'ASSIGNED')
+         or (
+           winner.status = loser.status
+           and (wt.departure_at, winner.id) < (lt.departure_at, loser.id)
+         )
+       )
+     limit 1;
+
+    exit when v_loser is null;
+
+    update public.trip_assignments set status = 'CANCELLED' where id = v_loser;
+
+    insert into public.audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+    values (
+      null, 'TRIP_CREW_UNASSIGNED', 'trip_assignment', v_loser,
+      jsonb_build_object(
+        'reason', 'Stood down by migration 20260915000031: the same person was '
+                  || 'rostered on two overlapping departures, which the new '
+                  || 'exclusion constraints make impossible.',
+        'droppedFrom', v_dropped,
+        'keptOn', v_kept
+      )
+    );
+
+    v_count := v_count + 1;
+    v_loser := null;
+  end loop;
+
+  if v_count > 0 then
+    raise notice
+      'Stood down % crew assignment(s) that had one person on two overlapping '
+      'departures. Those trips now show as uncrewed and need rostering again; '
+      'each change is in audit_logs as TRIP_CREW_UNASSIGNED.', v_count;
+  end if;
+end
+$preflight$;
 
 alter table public.trip_assignments
   add constraint trip_assignments_driver_no_overlap

@@ -7,16 +7,30 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-       "android": {
-        "buildType": "apk"
+      "environment": "development",
+      "env": {
+        "EXPO_PUBLIC_PAYMENT_PROVIDER": "mock",
+        "EXPO_PUBLIC_MAP_STYLE_URL": "https://tiles.openfreemap.org/styles/liberty"
       }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "environment": "preview",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_PAYMENT_PROVIDER": "mock",
+        "EXPO_PUBLIC_MAP_STYLE_URL": "https://tiles.openfreemap.org/styles/liberty"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_PAYMENT_PROVIDER": "mock",
+        "EXPO_PUBLIC_MAP_STYLE_URL": "https://tiles.openfreemap.org/styles/liberty"
+      }
     }
-
   }
 }

@@ -1,3 +1,4 @@
+import { ObserveInteractiveMarker } from 'expo-observe';
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -125,6 +126,13 @@ export default function PaymentPage() {
 
   return (
     <Screen scroll edges={['top', 'left', 'right', 'bottom']}>
+      {/*
+        A genuine cold-start entry point: this page is opened by scanning a
+        QR code, with no session and often no app installed. Reached only
+        once the payment has loaded, so the early returns above are excluded.
+        The reference itself never leaves the device — see src/lib/observe.ts.
+      */}
+      <ObserveInteractiveMarker />
       <BrandHero title="Payment Confirmation" size="md" withTagline={false} />
 
       <View className="pt-6" />

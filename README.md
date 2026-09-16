@@ -194,10 +194,17 @@ decided by the server and never accepted from the client. See [docs/security.md]
 - [deployment.md](docs/deployment.md) — the web build on Vercel, and what it does *not* deploy
 - [management.md](docs/management.md) — the admin → operator → crew hierarchy, the two staff
   statuses, and how a bus is stopped from being in two places at once
+- [observability.md](docs/observability.md) — EAS Observe: startup and navigation
+  metrics, and the route parameters deliberately kept out of them
 - [payment-flow.md](docs/payment-flow.md)
 - [phases.md](docs/phases.md) — the phased build process, gates and invariants
+- [production-costs.md](docs/production-costs.md) — assumptions and cost ranges for taking this to
+  production: remaining development, hosting, VPS, payment gateway, maps, store deployment,
+  Philippine compliance
 - [qr-flow.md](docs/qr-flow.md)
 - [realtime.md](docs/realtime.md)
 - [security.md](docs/security.md)
 - [test-accounts.md](docs/test-accounts.md) — seeded sign-in credentials for local testing
 - [testing.md](docs/testing.md)
+- [walkthrough.md](docs/walkthrough.md) — the prototype screen by screen, as each of
+  the four roles sees it, with screenshots taken from the running app

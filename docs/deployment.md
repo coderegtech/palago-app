@@ -1,4 +1,4 @@
-# Deployment — web on Vercel
+# Deployment — web on Vercel, apps on EAS
 
 Vercel hosts **the web build only**: the passenger and operator screens as a single-page app, plus
 the public `/payment/[reference]` page. It does not host the backend. Postgres, Auth, Realtime and
@@ -120,3 +120,122 @@ unsigned boarding pass is worse than none.
   committed without a regenerated `pnpm-lock.yaml` fails the build rather than silently drifting.
   `pnpm-workspace.yaml` and `.npmrc` are both tracked and both required — `.npmrc` public-hoists
   `react-native-css-interop`, without which the bundle fails to resolve `jsx-runtime`.
+
+---
+
+# Android builds
+
+## The app closed itself on launch, and this is why
+
+An APK built from the `preview` profile installed, showed the splash screen, and exited. No crash
+dialog, no message. The cause was not in the app code:
+
+- `.gitignore:57` ignores `.env*`, and **EAS uploads only what git tracks** — so `.env` never
+  reached the build server. Only `.env.example` did.
+- `eas.json` declared no `env` and no `environment` for any profile, so there was nothing to fall
+  back on.
+- Every `EXPO_PUBLIC_*` value therefore inlined as `undefined`.
+- `src/lib/env.ts` validates all five on import and throws. The root layout reaches it during module
+  evaluation — `_layout.tsx` → `AppProviders` → `useAuthBootstrap` → `@/lib/supabase` → `@/lib/env`
+  — which is **before React renders and before any error boundary exists**. A release build has no
+  red screen, and `SplashScreen.preventAutoHideAsync()` has already hidden the empty view behind the
+  splash. The process simply ends.
+
+The throw is correct and stays. What was missing was any way to see it.
+
+## Confirming it on a device
+
+```bash
+adb logcat -c && adb logcat *:E ReactNative:V ReactNativeJS:V | grep -i "palago\|misconfigured"
+```
+
+Launch the app while that is running. A configuration failure prints
+`PalaGo is misconfigured. Copy .env.example to .env and fill it in.` followed by the specific
+variables. Anything else — a missing native module, a MapLibre failure — shows up here too, so this
+is the first command to run for any silent exit, not just this one.
+
+## The fix: give the build its variables
+
+`eas.json` now sets the two constants inline and links each profile to an **EAS environment** of the
+same name for the three values that differ per deployment:
+
+| Variable | Where it lives | Why |
+|---|---|---|
+| `EXPO_PUBLIC_PAYMENT_PROVIDER` | inline in `eas.json` | Always `mock`. Not a secret, not per-environment. |
+| `EXPO_PUBLIC_MAP_STYLE_URL` | inline in `eas.json` | OpenFreeMap needs no key. |
+| `EXPO_PUBLIC_SUPABASE_URL` | EAS environment | Identifies the project; `.gitignore` says not to commit it. |
+| `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | EAS environment | Same. |
+| `EXPO_PUBLIC_WEB_PAYMENT_BASE_URL` | EAS environment | Differs per deployment, and **must not be localhost**. |
+
+Create them once per environment (`development`, `preview`, `production`):
+
+```bash
+eas env:create --environment preview --name EXPO_PUBLIC_SUPABASE_URL --value https://<project-ref>.supabase.co --visibility plaintext --non-interactive
+```
+
+```bash
+eas env:create --environment preview --name EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY --value sb_publishable_xxxxxxxx --visibility plaintext --non-interactive
+```
+
+```bash
+eas env:create --environment preview --name EXPO_PUBLIC_WEB_PAYMENT_BASE_URL --value https://<deployed-origin> --visibility plaintext --non-interactive
+```
+
+`--visibility plaintext` is right for all three: every `EXPO_PUBLIC_*` value is inlined into the
+bundle and is readable by anyone who unzips the APK. Marking them `secret` would hide them from the
+EAS dashboard while shipping them in the download — a false sense of safety, not a real one. Nothing
+that must stay private may be an `EXPO_PUBLIC_*` variable at all; those go in Supabase Edge Function
+secrets.
+
+Check what a profile will actually receive:
+
+```bash
+eas env:list --environment preview
+```
+
+## Do not copy `.env` into EAS unchanged
+
+`.env` is a **local development** file. Two of its values are wrong for an APK:
+
+- `EXPO_PUBLIC_WEB_PAYMENT_BASE_URL=http://127.0.0.1:8090` — inside an APK, `127.0.0.1` is the
+  phone. Payment QR codes would encode a URL resolving to the scanner's own handset, and password
+  recovery links would go nowhere. Use the deployed origin, and add it to **Supabase →
+  Authentication → URL Configuration** (see the web section above).
+- `EXPO_PUBLIC_SUPABASE_URL` pointing at `127.0.0.1:54321` has the same problem if `.env` is
+  currently aimed at the local stack. A device needs the hosted project, or the machine's LAN
+  address for a development build.
+
+## The build now fails instead of shipping a broken app
+
+`scripts/check-build-env.mjs` runs as the `eas-build-pre-install` hook — on the EAS builder, before
+install and before bundling. It refuses the build when a required variable is missing, when a URL is
+not a URL, when a non-development profile points at localhost or a private LAN range, when
+`EXPO_PUBLIC_PAYMENT_PROVIDER` is anything but `mock`, or when the publishable key looks like a
+secret key.
+
+npm never runs it locally: `eas-build-pre-install` is an EAS hook name, not an npm lifecycle event.
+
+A silent exit on a tester's phone is the most expensive place to find a missing variable. A failed
+build that names it is the cheapest.
+
+## Building
+
+```bash
+pnpm build:apk
+```
+
+`eas build --profile preview --platform android` — an installable APK, distributed internally.
+`preview` sets `buildType: "apk"` deliberately; the `production` profile produces an AAB for Play,
+which cannot be sideloaded.
+
+```bash
+pnpm build-dev:android
+```
+
+The development client, for running Metro against a device.
+
+## Still to verify on hardware
+
+MapLibre has never run on a real device — it typechecks against the v11 API, which is not the same
+thing. Push delivery is likewise unproven. Both need this APK on a handset; neither can fail at
+startup, so they will not reproduce the symptom above.

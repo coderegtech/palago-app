@@ -1,3 +1,4 @@
+import { ObserveInteractiveMarker } from 'expo-observe';
 import { Bus, Building2, MapPin, Route, TicketCheck, TrendingUp, Users } from 'lucide-react-native';
 import { ScrollView, View } from 'react-native';
 
@@ -78,6 +79,8 @@ export default function AdminOverviewScreen() {
     <Screen padded={false} maxWidth={AdminContentMaxWidth} edges={['left', 'right']}>
       <ScrollView contentContainerClassName="px-4 pb-8 gap-4" showsVerticalScrollIndicator={false}>
         <Header title="Platform overview" subtitle={`All operators · ${formatDateShort(today)}`} />
+        {/* An admin lands here on a cold start; TTI is when the figures resolve. */}
+        {!dashboard.isPending && <ObserveInteractiveMarker />}
 
         {dashboard.isPending ? (
           <View className="gap-3">
