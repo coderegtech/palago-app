@@ -21,7 +21,7 @@ export interface BrandHeroProps {
  * horizontal padding with negative margins so the colour reaches the edges
  * while the content column stays aligned.
  */
-export function BrandHero({ title, subtitle, size = 'lg', withTagline = true }: BrandHeroProps) {
+export function BrandHero({ title, subtitle, size = 'md', withTagline = true }: BrandHeroProps) {
   return (
     <LinearGradient
       colors={[...Gradients.brand]}

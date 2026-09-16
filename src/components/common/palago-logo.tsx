@@ -50,7 +50,8 @@ export function PalaGoLogo({
   const wordmark = (
     <View className="items-center">
       <Text
-        style={{ fontSize: wordSize[size], lineHeight: wordSize[size] * 1.18, fontWeight: '800' }}>
+      className="h-10"
+        style={{ fontSize: wordSize[size], fontWeight: '800' }}>
         <Text style={{ color: palaColor, fontSize: wordSize[size], fontWeight: '800' }}>Pala</Text>
         <Text style={{ color: goColor, fontSize: wordSize[size], fontWeight: '800' }}>Go</Text>
       </Text>
