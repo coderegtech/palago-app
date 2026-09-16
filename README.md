@@ -196,6 +196,9 @@ decided by the server and never accepted from the client. See [docs/security.md]
   statuses, and how a bus is stopped from being in two places at once
 - [payment-flow.md](docs/payment-flow.md)
 - [phases.md](docs/phases.md) — the phased build process, gates and invariants
+- [production-costs.md](docs/production-costs.md) — assumptions and cost ranges for taking this to
+  production: remaining development, hosting, VPS, payment gateway, maps, store deployment,
+  Philippine compliance
 - [qr-flow.md](docs/qr-flow.md)
 - [realtime.md](docs/realtime.md)
 - [security.md](docs/security.md)
