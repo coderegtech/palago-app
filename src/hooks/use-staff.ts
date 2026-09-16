@@ -114,6 +114,22 @@ export function useUpdateCrew() {
   });
 }
 
+/**
+ * The crew member's own availability switch.
+ *
+ * Invalidates the same keys as the manager-facing mutation, so an operator with
+ * the crew screen open sees the change without reloading.
+ */
+export function useSetMyAvailability() {
+  const refresh = useRefreshStaff();
+
+  return useMutation({
+    mutationFn: ({ status, reason }: { status: AvailabilityStatus; reason?: string }) =>
+      staffService.setMyAvailability(status, reason),
+    onSuccess: refresh,
+  });
+}
+
 export function useSetCrewAvailability() {
   const refresh = useRefreshStaff();
 
