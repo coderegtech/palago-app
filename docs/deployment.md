@@ -135,16 +135,30 @@ Sign up through the app first so the row exists. After that nothing else needs t
 SQL editor: that account provisions operator accounts through the app, and each
 operator provisions their own drivers and crew.
 
-### 5. Add reference data through the app
+### 5. Put something in it
 
-**Never run `supabase/seed.sql` against a hosted project.** It creates seven
-accounts sharing one password, plus test trips, test bookings and test money. It
-exists for a database that is thrown away every `pnpm db:reset`.
+**Never run `supabase/seed.sql` against a hosted project.** Beyond the accounts it
+creates, it fabricates bookings, payments, receipts, wallet balances, loyalty
+points and boarding scans. This build charges nothing, but a receipt or a balance
+in a shared project is indistinguishable from a real one.
 
-Add terminals, routes, operators and coaches through the admin console instead.
-They go through `create_operator` / `create_terminal` / `create_route` / `create_bus`,
-which validate and write `audit_logs` — so the hosted project gets a real trail
-from its first row, which a SQL paste would not leave.
+For a project you want to sign in to and demo, there is
+**`supabase/seed.cloud.sql`** — the same accounts, operators, terminals, routes,
+coaches, crew and a rolling set of departures, and none of the fabricated
+transactions. Paste it into **Studio → SQL Editor**, or:
+
+```bash
+psql "<connection string from Project Settings → Database>" -f supabase/seed.cloud.sql
+```
+
+Migrations first — it assumes the schema. Every statement is guarded, so running
+it twice is a no-op.
+
+For a project meant to become real, skip it and add terminals, routes, operators
+and coaches through the admin console. Those go through `create_operator` /
+`create_terminal` / `create_route` / `create_bus`, which validate and write
+`audit_logs`, so the project has a genuine trail from its first row — which a SQL
+paste does not leave.
 
 An empty project is not broken, it just looks it: the app renders with no
 operators, no routes and nothing to search.

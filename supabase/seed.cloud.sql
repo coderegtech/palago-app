@@ -117,14 +117,14 @@ on conflict (code) do nothing;
 -- Roles and operator membership (idempotent — re-sets the same values)
 -- ---------------------------------------------------------------------------
 
-update public.profiles p set role = 'ADMIN' where p.email = 'admin@palago.test';
+update public.profiles p set role = 'SUPER_ADMIN' where p.email = 'admin@palago.test';
 
 update public.profiles p
-set role = 'OPERATOR', operator_id = (select id from public.operators where code = 'CHERRY')
+set role = 'OPERATOR_ADMIN', operator_id = (select id from public.operators where code = 'CHERRY')
 where p.email = 'operator@palago.test';
 
 update public.profiles p
-set role = 'OPERATOR', operator_id = (select id from public.operators where code = 'RORO')
+set role = 'OPERATOR_ADMIN', operator_id = (select id from public.operators where code = 'RORO')
 where p.email = 'roro@palago.test';
 
 update public.profiles p
@@ -132,7 +132,7 @@ set role = 'DRIVER', operator_id = (select id from public.operators where code =
 where p.email = 'driver@palago.test';
 
 update public.profiles p
-set role = 'ASSISTANT', operator_id = (select id from public.operators where code = 'CHERRY')
+set role = 'CREW', operator_id = (select id from public.operators where code = 'CHERRY')
 where p.email = 'assistant@palago.test';
 
 update public.profiles p
