@@ -318,18 +318,34 @@ console.log('\nWho may scan');
   // Take the crew off this trip — an ordinary operator action — and the same
   // driver can no longer scan at its door. Before, any driver of the operator
   // could scan any of its trips.
+  //
+  // Through the RPC, not a direct UPDATE: 20260916000033 withdrew client writes
+  // on trip_assignments, because the policy guarding them never checked that
+  // the driver belonged to the operator doing the writing. Going through
+  // `unassign_trip_crew` is also the more honest test — it is what the operator
+  // console actually does, rather than a write only a test ever performed.
   const crew = (
-    await cherry.supabase.from('trip_assignments').select('id, status')
+    await cherry.supabase.from('trip_assignments').select('id, driver_id, assistant_id, status')
       .eq('trip_id', paidTrip.id).neq('status', 'CANCELLED').single()
   ).data;
-  await cherry.supabase.from('trip_assignments').update({ status: 'CANCELLED' }).eq('id', crew.id);
+  const { error: standDown } = await cherry.supabase.rpc('unassign_trip_crew', {
+    p_trip_id: paidTrip.id,
+  });
+  check('an operator can take the crew off a trip', !standDown, standDown?.message);
+
   const offDuty = await invoke('validate-qr', { payload: qrPayload, tripId: paidTrip.id }, driver.accessToken);
   check(
     'a driver not crewing this trip cannot scan at its door',
     offDuty.body?.success === false && offDuty.body?.code === 'FORBIDDEN',
     offDuty.body?.code ?? offDuty.body?.data?.result,
   );
-  await cherry.supabase.from('trip_assignments').update({ status: crew.status }).eq('id', crew.id);
+
+  const { error: putBack } = await cherry.supabase.rpc('assign_trip_crew', {
+    p_trip_id: paidTrip.id,
+    p_driver_id: crew.driver_id,
+    p_assistant_id: crew.assistant_id,
+  });
+  check('and can put them back on it', !putBack, putBack?.message);
 }
 
 // ---------------------------------------------------------------------------

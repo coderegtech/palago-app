@@ -72,9 +72,9 @@ Then, before declaring the phase done:
 | 9 | Mock wallet — balance, test top-ups, ledger, paying a booking | **Done** |
 | 10 | Loyalty — points earned for completed trips, rewards catalogue, redemption | **Done** |
 | 11 | SOS — emergency alerts, operator response workflow | **Done** |
-| 12 | Notifications | Next |
-| 13 | Security review | Not started |
-| 14 | Testing | Not started |
+| 12 | Notifications | **Done** — in-app feed and realtime verified; push delivery to a handset unproven (needs a device) |
+| 13 | Security review | **Done** — four write paths found and closed, see [security-review.md](security-review.md) |
+| 14 | Testing | Next |
 | 15 | Production preparation | Not started |
 
 ## Invariants
@@ -437,6 +437,7 @@ Scope moves between phases are recorded here rather than left implicit.
 | Wallet balance on the home screen | 9 | Phase 8's home screen said "wallet and rewards are not built yet"; half of that stopped being true |
 | SOS schema rewritten before it ever applied | 11 | The first cut referenced `trip_assignments.assigned_to` and an `audit_log_trigger()` that does not exist, so `db:reset` and `db:push` both failed outright. Rewritten to the conventions the other ten phases use — a real enum, bounded coordinates, `search_path = ''`, grants, no client write path — rather than patched to merely apply |
 | `cancel_sos` and `respond_sos` | 11 (added) | `SOSStatus` already carried RESPONDING and CANCELLED, and nothing set either. A status an enum promises and no code path reaches is a lie in the type |
+| Rate limiting | 13 → deferred | Assessed rather than built. The brute-force vectors are already closed by Supabase Auth's sign-in limit and a 256-bit payment token; what remains is resource abuse, which a Postgres counter does not solve and a CDN does. Recorded in [security-review.md](security-review.md) §3.1 |
 | Admin console | Unplanned, built on request | Not in the fifteen-phase plan. An ADMIN previously landed on the passenger home with no surface of their own, and reference data could only be added by editing `seed.sql`. Scope was held to analytics plus operators, terminals, routes and buses; trip scheduling stays with the operator console |
 
 ## Commands

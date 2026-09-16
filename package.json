@@ -90,7 +90,7 @@
     "db:verify": "node scripts/verify-rls.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "db:verify:booking": "node scripts/verify-booking.mjs",
-    "db:verify:all": "node scripts/verify-rls.mjs && node scripts/verify-booking.mjs && node scripts/verify-payment.mjs && node scripts/verify-boarding.mjs && node scripts/verify-operator.mjs && node scripts/verify-tracking.mjs && node scripts/verify-wallet.mjs && node scripts/verify-loyalty.mjs && node scripts/verify-sos.mjs && node scripts/verify-discount.mjs && node scripts/verify-counter.mjs && node scripts/verify-notifications.mjs && node scripts/verify-staff-accounts.mjs && node scripts/verify-schedules.mjs && node scripts/verify-admin.mjs",
+    "db:verify:all": "node scripts/verify-rls.mjs && node scripts/verify-booking.mjs && node scripts/verify-payment.mjs && node scripts/verify-boarding.mjs && node scripts/verify-operator.mjs && node scripts/verify-tracking.mjs && node scripts/verify-wallet.mjs && node scripts/verify-loyalty.mjs && node scripts/verify-sos.mjs && node scripts/verify-discount.mjs && node scripts/verify-counter.mjs && node scripts/verify-notifications.mjs && node scripts/verify-staff-accounts.mjs && node scripts/verify-schedules.mjs && node scripts/verify-admin.mjs && node scripts/verify-security.mjs",
     "db:verify:payment": "node scripts/verify-payment.mjs",
     "functions:serve": "supabase functions serve --env-file supabase/functions/.env",
     "db:verify:boarding": "node scripts/verify-boarding.mjs",
@@ -108,7 +108,8 @@
     "db:verify:schedules": "node scripts/verify-schedules.mjs",
     "docs:screens": "node scripts/capture-walkthrough.mjs",
     "eas-build-pre-install": "node scripts/check-build-env.mjs",
-    "build:apk": "eas build --profile preview --platform android"
+    "build:apk": "eas build --profile preview --platform android",
+    "db:verify:security": "node scripts/verify-security.mjs"
   },
   "private": true
 }
