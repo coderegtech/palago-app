@@ -338,6 +338,149 @@ check(
   `${mismatched.length} cross-operator assignment(s)`,
 );
 
+// ---------------------------------------------------------------------------
+console.log('\nA driver owns their own availability');
+// ---------------------------------------------------------------------------
+
+// The hierarchy gives this to the person themselves: going off-shift should not
+// need a manager. It gates future rostering only — it is not a way to walk off a
+// trip already assigned, and it is not the same lever as disabling an account,
+// which stays with the OPERATOR_ADMIN.
+const mine = await driver.supabase.rpc('set_my_availability', {
+  p_status: 'UNAVAILABLE',
+  p_reason: 'verify-security: end of shift',
+});
+check('a driver can stand themselves down', !mine.error, mine.error?.message);
+check('and is told which record changed', mine.data?.kind === 'DRIVER', JSON.stringify(mine.data));
+
+const { data: afterStandDown } = await cherry.supabase
+  .from('operator_crew')
+  .select('id, availability_status')
+  .eq('id', mine.data?.id)
+  .maybeSingle();
+check(
+  'their operator sees it immediately',
+  afterStandDown?.availability_status === 'UNAVAILABLE',
+  afterStandDown?.availability_status,
+);
+
+// Still signed in, still reading their own roster. Availability is not account
+// status, and the whole point of two fields is that they cannot collapse.
+const { error: stillWorks } = await driver.supabase.from('trip_assignments').select('id').limit(1);
+check('and they are still signed in and can read their roster', !stillWorks, stillWorks?.message);
+
+const { error: backOn } = await driver.supabase.rpc('set_my_availability', {
+  p_status: 'AVAILABLE',
+  p_reason: null,
+});
+check('they can put themselves back on', !backOn, backOn?.message);
+
+// Nobody without a crew record has an availability to set.
+for (const [who, session] of [
+  ['a passenger', passenger],
+  ['an operator manager', cherry],
+  ['an admin', admin],
+]) {
+  const { error } = await session.supabase.rpc('set_my_availability', {
+    p_status: 'UNAVAILABLE',
+    p_reason: null,
+  });
+  check(`${who} has no availability of their own to set`, Boolean(error), 'the call succeeded');
+}
+
+// ---------------------------------------------------------------------------
+console.log('\nDelete removes only what nothing points at');
+// ---------------------------------------------------------------------------
+
+// The hierarchy asks for delete; the standing invariant is that reference data
+// is never hard-deleted, because tickets, payments and boarding scans point at
+// it. Both hold if "delete" refuses with a reason instead of hiding a button.
+const { data: usedBus } = await cherry.supabase
+  .from('operator_fleet')
+  .select('id, operator_id')
+  .limit(1);
+
+if (usedBus?.[0]) {
+  const { data: refused, error: refusedError } = await cherry.supabase.rpc('delete_bus', {
+    p_bus_id: usedBus[0].id,
+  });
+  check('a coach that is on trips is not deleted', refused?.deleted === false, refusedError?.message);
+  check('and the refusal counts the trips', (refused?.trips ?? 0) > 0, JSON.stringify(refused));
+
+  const { data: stillThere } = await cherry.supabase
+    .from('operator_fleet')
+    .select('id')
+    .eq('id', usedBus[0].id)
+    .maybeSingle();
+  check('and the coach is still there', Boolean(stillThere), 'the coach is gone');
+}
+
+// A coach nobody ever scheduled is a typo, and removing it loses nothing.
+const { data: fresh, error: freshError } = await cherry.supabase.rpc('create_bus', {
+  p_operator_id: usedBus?.[0]?.operator_id,
+  p_plate_number: `VS-DEL-${Date.now().toString(36).slice(-5).toUpperCase()}`,
+  p_bus_number: `DEL-${Date.now().toString(36).slice(-4).toUpperCase()}`,
+  p_capacity: 10,
+  p_bus_type: 'BUS',
+  p_name: 'verify-security throwaway',
+});
+check('an operator can add a coach', !freshError, freshError?.message);
+
+if (fresh?.id) {
+  const rival = await roro.supabase.rpc('delete_bus', { p_bus_id: fresh.id });
+  check(
+    'a rival operator cannot delete it',
+    rival.data?.deleted !== true,
+    JSON.stringify(rival.data ?? rival.error?.message),
+  );
+
+  const { data: gone, error: goneError } = await cherry.supabase.rpc('delete_bus', {
+    p_bus_id: fresh.id,
+  });
+  check(
+    'its owner can delete a coach that never ran',
+    gone?.deleted === true,
+    goneError?.message ?? JSON.stringify(gone),
+  );
+
+  const { data: survivor } = await admin.supabase
+    .from('buses')
+    .select('id')
+    .eq('id', fresh.id)
+    .maybeSingle();
+  check('and it is really gone, seat layout and all', !survivor, 'the row survived');
+}
+
+// A company with a fleet, staff and a timetable is not deletable at all.
+const { data: cherryOperator } = await admin.supabase
+  .from('operators')
+  .select('id')
+  .eq('code', 'CHERRY')
+  .single();
+
+const { data: opRefused } = await admin.supabase.rpc('delete_operator', {
+  p_operator_id: cherryOperator.id,
+});
+check(
+  'a company with trips, coaches and staff is not deleted',
+  opRefused?.deleted === false,
+  JSON.stringify(opRefused),
+);
+check(
+  'and the refusal counts what is in the way',
+  (opRefused?.trips ?? 0) > 0 && (opRefused?.buses ?? 0) > 0,
+  JSON.stringify(opRefused),
+);
+
+const byOperator = await cherry.supabase.rpc('delete_operator', {
+  p_operator_id: cherryOperator.id,
+});
+check(
+  'and an operator manager cannot delete their own company',
+  byOperator.data?.deleted !== true,
+  JSON.stringify(byOperator.data ?? byOperator.error?.message),
+);
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) {
   console.log('\nFailed:');

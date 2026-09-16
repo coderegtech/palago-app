@@ -193,7 +193,7 @@ export default function AdminOperatorsScreen() {
       const result = await createAccount.mutateAsync({
         email: accountDraft.email,
         fullName: accountDraft.fullName,
-        role: 'OPERATOR',
+        role: 'OPERATOR_ADMIN',
         operatorId: accountFor.id,
         phone: accountDraft.phone || undefined,
       });

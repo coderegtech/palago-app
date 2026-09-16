@@ -22,12 +22,12 @@ import { usePushRegistration } from '@/hooks/use-push';
  */
 export function homeRouteForRole(role: UserRole | undefined): Href {
   switch (role) {
-    case UserRole.OPERATOR:
+    case UserRole.OPERATOR_ADMIN:
       return '/(operator)/dashboard';
     case UserRole.DRIVER:
-    case UserRole.ASSISTANT:
+    case UserRole.CREW:
       return '/(driver)/duty';
-    case UserRole.ADMIN:
+    case UserRole.SUPER_ADMIN:
       return '/(admin)/overview';
     case UserRole.USER:
     default:

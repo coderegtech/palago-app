@@ -18,7 +18,7 @@ import { Colors } from '@/constants/theme';
  */
 export default function DriverLayout() {
   return (
-    <AuthGate allow={[UserRole.DRIVER, UserRole.ASSISTANT]}>
+    <AuthGate allow={[UserRole.DRIVER, UserRole.CREW]}>
       <Tabs
         screenOptions={{
           headerShown: false,

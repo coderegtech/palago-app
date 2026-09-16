@@ -127,7 +127,7 @@ describe('profileSchema', () => {
 
   it('has no role field, so a role can never be submitted', () => {
     // The database also revokes the column grant; this asserts the client half.
-    const parsed = profileSchema.parse({ ...valid, role: 'ADMIN' } as never);
+    const parsed = profileSchema.parse({ ...valid, role: 'SUPER_ADMIN' } as never);
     expect(parsed).not.toHaveProperty('role');
   });
 });

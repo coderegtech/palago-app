@@ -89,7 +89,7 @@ const refusals = [
       action: 'create',
       email: `refused-op-${RUN}@palago.test`,
       fullName: 'Should Not Exist',
-      role: 'OPERATOR',
+      role: 'OPERATOR_ADMIN',
       operatorId: cherryId,
     },
     expect: 'FORBIDDEN',
@@ -127,7 +127,7 @@ const refusals = [
       action: 'create',
       email: `refused-pax-${RUN}@palago.test`,
       fullName: 'Should Not Exist',
-      role: 'ASSISTANT',
+      role: 'CREW',
       operatorId: cherryId,
     },
     expect: 'FORBIDDEN',
@@ -139,7 +139,7 @@ const refusals = [
       action: 'create',
       email: `refused-admin-${RUN}@palago.test`,
       fullName: 'Should Not Exist',
-      role: 'ADMIN',
+      role: 'SUPER_ADMIN',
       operatorId: cherryId,
     },
     expect: 'VALIDATION_ERROR',
@@ -173,7 +173,7 @@ const madeOperator = await manageStaff(
     action: 'create',
     email: opEmail,
     fullName: 'Provisioned Operator',
-    role: 'OPERATOR',
+    role: 'OPERATOR_ADMIN',
     operatorId: cherryId,
     phone: '09171112233',
   },
@@ -203,7 +203,7 @@ const duplicate = await manageStaff(
     action: 'create',
     email: opEmail,
     fullName: 'Second Try',
-    role: 'OPERATOR',
+    role: 'OPERATOR_ADMIN',
     operatorId: cherryId,
   },
   admin.accessToken,
@@ -219,7 +219,7 @@ const { data: opProfile } = await newOperator.supabase
   .eq('id', newOperator.userId)
   .single();
 
-check('with the OPERATOR role', opProfile.role === 'OPERATOR', opProfile.role);
+check('with the OPERATOR_ADMIN role', opProfile.role === 'OPERATOR_ADMIN', opProfile.role);
 check('scoped to the right company', opProfile.operator_id === cherryId, opProfile.operator_id);
 check('an ACTIVE account', opProfile.account_status === 'ACTIVE', opProfile.account_status);
 check('and a password it must change', opProfile.must_change_password === true);
@@ -639,7 +639,7 @@ console.log('\nScenario 10: crew records without a login');
 // ---------------------------------------------------------------------------
 
 const roster = await cherry.supabase.rpc('create_crew_member', {
-  p_kind: 'ASSISTANT',
+  p_kind: 'CREW',
   p_name: `Roster Only ${RUN}`,
   p_phone: '09175556677',
 });
@@ -656,7 +656,7 @@ check('with no account status to report', rosterRow.account_status === null, ros
 check('but they are available for work', rosterRow.availability_status === 'AVAILABLE');
 
 const rivalCreates = await roro.supabase.rpc('create_crew_member', {
-  p_kind: 'ASSISTANT',
+  p_kind: 'CREW',
   p_name: 'Rival Intrusion',
   p_operator_id: cherryId,
 });
@@ -667,7 +667,7 @@ check(
 );
 
 const renamed = await cherry.supabase.rpc('update_crew_member', {
-  p_kind: 'ASSISTANT',
+  p_kind: 'CREW',
   p_crew_id: rosterId,
   p_name: `Roster Renamed ${RUN}`,
   p_phone: '09175556677',
@@ -675,7 +675,7 @@ const renamed = await cherry.supabase.rpc('update_crew_member', {
 check('the operator can edit them', renamed.error === null, renamed.error?.message);
 
 const rivalEdits = await roro.supabase.rpc('update_crew_member', {
-  p_kind: 'ASSISTANT',
+  p_kind: 'CREW',
   p_crew_id: rosterId,
   p_name: 'Renamed by a rival',
 });
@@ -699,7 +699,7 @@ const linked = await manageStaff(
     action: 'create',
     email: rosterEmail,
     fullName: `Roster Renamed ${RUN}`,
-    role: 'ASSISTANT',
+    role: 'CREW',
     operatorId: cherryId,
     crewId: rosterId,
   },

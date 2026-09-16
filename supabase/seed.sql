@@ -103,14 +103,14 @@ insert into public.operators (name, code, description, contact_phone, contact_em
 -- Roles and operator membership
 -- ---------------------------------------------------------------------------
 
-update public.profiles p set role = 'ADMIN' where p.email = 'admin@palago.test';
+update public.profiles p set role = 'SUPER_ADMIN' where p.email = 'admin@palago.test';
 
 update public.profiles p
-set role = 'OPERATOR', operator_id = (select id from public.operators where code = 'CHERRY')
+set role = 'OPERATOR_ADMIN', operator_id = (select id from public.operators where code = 'CHERRY')
 where p.email = 'operator@palago.test';
 
 update public.profiles p
-set role = 'OPERATOR', operator_id = (select id from public.operators where code = 'RORO')
+set role = 'OPERATOR_ADMIN', operator_id = (select id from public.operators where code = 'RORO')
 where p.email = 'roro@palago.test';
 
 update public.profiles p
@@ -118,7 +118,7 @@ set role = 'DRIVER', operator_id = (select id from public.operators where code =
 where p.email in ('driver@palago.test', 'driver2@palago.test');
 
 update public.profiles p
-set role = 'ASSISTANT', operator_id = (select id from public.operators where code = 'CHERRY')
+set role = 'CREW', operator_id = (select id from public.operators where code = 'CHERRY')
 where p.email in ('assistant@palago.test', 'assistant2@palago.test');
 
 update public.profiles p

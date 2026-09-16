@@ -22,10 +22,10 @@ import { UserRole } from '@/constants/enums';
 describe('homeRouteForRole', () => {
   it.each([
     [UserRole.USER, '/(user)/home'],
-    [UserRole.OPERATOR, '/(operator)/dashboard'],
+    [UserRole.OPERATOR_ADMIN, '/(operator)/dashboard'],
     [UserRole.DRIVER, '/(driver)/duty'],
-    [UserRole.ASSISTANT, '/(driver)/duty'],
-    [UserRole.ADMIN, '/(admin)/overview'],
+    [UserRole.CREW, '/(driver)/duty'],
+    [UserRole.SUPER_ADMIN, '/(admin)/overview'],
   ])('sends %s to %s', (role, expected) => {
     expect(homeRouteForRole(role)).toBe(expected);
   });
@@ -41,13 +41,13 @@ describe('homeRouteForRole', () => {
     // here it means a group was renamed and only one arm was updated.
     const destinations = [
       UserRole.USER,
-      UserRole.OPERATOR,
+      UserRole.OPERATOR_ADMIN,
       UserRole.DRIVER,
-      UserRole.ASSISTANT,
-      UserRole.ADMIN,
+      UserRole.CREW,
+      UserRole.SUPER_ADMIN,
     ].map(homeRouteForRole);
 
-    expect(homeRouteForRole(UserRole.DRIVER)).toBe(homeRouteForRole(UserRole.ASSISTANT));
+    expect(homeRouteForRole(UserRole.DRIVER)).toBe(homeRouteForRole(UserRole.CREW));
     expect(new Set(destinations).size).toBe(4);
   });
 
@@ -56,10 +56,10 @@ describe('homeRouteForRole', () => {
     // the caller's own group is an immediate redirect back, which loops.
     const groupOf = (href: string) => href.match(/^\/\(([^)]+)\)/)?.[1];
 
-    expect(groupOf(String(homeRouteForRole(UserRole.OPERATOR)))).toBe('operator');
-    expect(groupOf(String(homeRouteForRole(UserRole.ADMIN)))).toBe('admin');
+    expect(groupOf(String(homeRouteForRole(UserRole.OPERATOR_ADMIN)))).toBe('operator');
+    expect(groupOf(String(homeRouteForRole(UserRole.SUPER_ADMIN)))).toBe('admin');
     expect(groupOf(String(homeRouteForRole(UserRole.DRIVER)))).toBe('driver');
-    expect(groupOf(String(homeRouteForRole(UserRole.ASSISTANT)))).toBe('driver');
+    expect(groupOf(String(homeRouteForRole(UserRole.CREW)))).toBe('driver');
     expect(groupOf(String(homeRouteForRole(UserRole.USER)))).toBe('user');
   });
 });

@@ -168,7 +168,7 @@ export function CrewManagement({ kind, title, subtitle, fallbackHref }: CrewMana
         const result = await createAccount.mutateAsync({
           email: draft.email,
           fullName: draft.name,
-          role: isDriver ? 'DRIVER' : 'ASSISTANT',
+          role: isDriver ? 'DRIVER' : 'CREW',
           operatorId: profile!.operatorId!,
           phone: draft.phone || undefined,
           licenseNumber: draft.licenseNumber || undefined,

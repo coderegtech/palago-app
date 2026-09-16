@@ -100,7 +100,7 @@ export interface ProvisionedAccount {
 export interface CreateStaffInput {
   email: string;
   fullName: string;
-  role: Extract<UserRole, 'OPERATOR' | 'DRIVER' | 'ASSISTANT'>;
+  role: Extract<UserRole, 'OPERATOR_ADMIN' | 'DRIVER' | 'CREW'>;
   operatorId: UUID;
   phone?: string;
   licenseNumber?: string;
@@ -305,6 +305,29 @@ export const staffService = {
       p_reason: reason?.trim() || undefined,
     });
     if (error) throw fromRpcError(error);
+  },
+
+  /**
+   * A driver or crew member standing themselves up or down.
+   *
+   * Distinct from `setAvailability`, which is a manager acting on somebody
+   * else: this one takes no id at all. The server resolves the caller's own
+   * crew record, so there is nothing here to point at another person.
+   *
+   * It gates future rostering only. It does not sign anyone out — that is
+   * `account_status`, and only an operator can move it — and it does not
+   * release a trip already assigned.
+   */
+  async setMyAvailability(
+    status: AvailabilityStatus,
+    reason?: string,
+  ): Promise<{ kind: CrewKind; availabilityStatus: AvailabilityStatus }> {
+    const { data, error } = await supabase.rpc('set_my_availability', {
+      p_status: status,
+      p_reason: reason?.trim() || undefined,
+    });
+    if (error) throw fromRpcError(error);
+    return data as unknown as { kind: CrewKind; availabilityStatus: AvailabilityStatus };
   },
 
   /** Clears the forced-change flag, after the account holder has actually set one. */

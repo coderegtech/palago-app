@@ -15,7 +15,7 @@ import { Colors } from '@/constants/theme';
  */
 export default function OperatorLayout() {
   return (
-    <AuthGate allow={[UserRole.OPERATOR, UserRole.ADMIN]}>
+    <AuthGate allow={[UserRole.OPERATOR_ADMIN, UserRole.SUPER_ADMIN]}>
       <Tabs
         screenOptions={{
           headerShown: false,

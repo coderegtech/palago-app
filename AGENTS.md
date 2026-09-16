@@ -141,6 +141,14 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
   `[dynamic]` route, decide about its parameter. See docs/observability.md.
 - **MapLibre is native-only.** No Expo Go, no react-native-web. Keep the `map.tsx` / `map.web.tsx`
   split — importing MapLibre into the web bundle breaks the public payment page. See docs/realtime.md.
+- **`h-full` on a card inside a ScrollView is a native-only bug.** `height: 100%` needs a parent
+  with a definite height; inside a ScrollView there isn't one, and where web resolves it
+  harmlessly Yoga resolves it against the scroll viewport — so the operator cards on the home
+  screen and the management tiles on the operator dashboard were each a full screen tall in the
+  APK, pushing Quick Actions off the bottom. It looked perfect on web, which is why it shipped.
+  For equal-height cards in a row use `flex-1` on the card: the row already stretches each
+  Pressable to the tallest sibling, and `flex-1` fills that with no percentage involved.
+  `h-full` is still right for a bar inside a track with an explicit height (`h-2`).
 - **react-native-svg: use `transform="translate(x y)"`, not `translateX`/`translateY` props.** Those
   are native-only and leak to the DOM on web as unknown React attributes.
 - **App icons are generated** from `assets/brand/palago-icon.svg` by `node scripts/generate-icons.mjs`.

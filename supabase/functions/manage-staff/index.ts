@@ -25,7 +25,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 import { fail, failFromRpc, handleOptions, ok } from '../_shared/http.ts';
 
-type StaffRole = 'OPERATOR' | 'DRIVER' | 'ASSISTANT';
+type StaffRole = 'OPERATOR_ADMIN' | 'DRIVER' | 'CREW';
 
 interface CreateBody {
   action: 'create';
@@ -72,7 +72,9 @@ function temporaryPassword(length = 12): string {
   return Array.from(bytes, (n) => ALPHABET[n % ALPHABET.length]).join('');
 }
 
-const STAFF_ROLES: StaffRole[] = ['OPERATOR', 'DRIVER', 'ASSISTANT'];
+// The three roles somebody else can be given. SUPER_ADMIN is absent on
+// purpose: nobody provisions a platform administrator through this door.
+const STAFF_ROLES: StaffRole[] = ['OPERATOR_ADMIN', 'DRIVER', 'CREW'];
 
 function isEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);

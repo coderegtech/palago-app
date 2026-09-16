@@ -303,7 +303,15 @@ export default function HomeScreen() {
                       params: { operator: operator.code },
                     })
                   }>
-                  <Card className="h-full gap-2 active:bg-primary-soft">
+                  {/*
+                    `flex-1`, never `h-full`. The row stretches each Pressable to
+                    the tallest sibling, and flex-1 fills that — whereas
+                    `height: 100%` is a percentage of a parent with no definite
+                    height inside a ScrollView, which web resolves harmlessly and
+                    Yoga resolves against the scroll viewport. On web the cards
+                    looked right; in the APK each one was screen-tall.
+                  */}
+                  <Card className="flex-1 gap-2 active:bg-primary-soft">
                     <View className="h-9 w-9 items-center justify-center rounded-full bg-primary-soft">
                       {operator.code === 'RORO' ? (
                         <Ship size={18} color={Colors.primary} />

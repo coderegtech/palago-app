@@ -2371,6 +2371,9 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
       }
+      delete_bus: { Args: { p_bus_id: string }; Returns: Json }
+      delete_operator: { Args: { p_operator_id: string }; Returns: Json }
+      delete_trip: { Args: { p_trip_id: string }; Returns: Json }
       discount_rate_bps: { Args: never; Returns: number }
       end_trip: { Args: { p_trip_id: string }; Returns: Json }
       expire_seat_holds: { Args: never; Returns: Json }
@@ -2488,6 +2491,13 @@ export type Database = {
         Args: {
           p_crew_id: string
           p_kind: string
+          p_reason?: string
+          p_status: Database["public"]["Enums"]["availability_status"]
+        }
+        Returns: Json
+      }
+      set_my_availability: {
+        Args: {
           p_reason?: string
           p_status: Database["public"]["Enums"]["availability_status"]
         }
@@ -2748,7 +2758,7 @@ export type Database = {
         | "ARRIVED"
         | "COMPLETED"
         | "CANCELLED"
-      user_role: "USER" | "OPERATOR" | "DRIVER" | "ASSISTANT" | "ADMIN"
+      user_role: "USER" | "OPERATOR_ADMIN" | "DRIVER" | "CREW" | "SUPER_ADMIN"
       wallet_transaction_type:
         | "TOP_UP"
         | "BOOKING_PAYMENT"
@@ -2971,7 +2981,7 @@ export const Constants = {
         "COMPLETED",
         "CANCELLED",
       ],
-      user_role: ["USER", "OPERATOR", "DRIVER", "ASSISTANT", "ADMIN"],
+      user_role: ["USER", "OPERATOR_ADMIN", "DRIVER", "CREW", "SUPER_ADMIN"],
       wallet_transaction_type: [
         "TOP_UP",
         "BOOKING_PAYMENT",
