@@ -310,7 +310,11 @@ export const operatorService = {
     const { data, error } = await supabase
       .from('operator_fleet')
       .select('id, bus_number, plate_number, name, bus_type, capacity, status')
-      .order('bus_number');
+      // Newest first: these are management tables, and the row you just added
+      // or edited is the one you are looking for. The dropdown
+      // versions of these lists live in trip-service and stay alphabetical —
+      // there you are looking for a terminal you already know the name of.
+      .order('created_at', { ascending: false });
 
     if (error) throw toAppError(error);
     return (data as unknown as FleetRow[]).map((row) => ({
@@ -402,7 +406,12 @@ export const operatorService = {
           'origin:terminals!routes_origin_terminal_id_fkey(code, name), ' +
           'destination:terminals!routes_destination_terminal_id_fkey(code, name)',
       )
-      .order('created_at');
+      // Newest first: these are management tables, and the row you just added
+      // or edited is the one you are looking for. `updated_at` rather than
+      // `created_at` so an edit brings a row back to the top. The dropdown
+      // versions of these lists live in trip-service and stay alphabetical —
+      // there you are looking for a terminal you already know the name of.
+      .order('updated_at', { ascending: false });
 
     if (error) throw toAppError(error);
     return (data as unknown as OperatorRouteRow[]).map((row) => ({

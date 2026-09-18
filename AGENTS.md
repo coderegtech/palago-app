@@ -114,6 +114,19 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
   `email_change_token_new`/`email_change` set to `''` and a matching `auth.identities` row, or
   sign-in fails with the misleading "Database error querying schema". See docs/database.md.
 - Guards (`AuthGate`) are navigation only. Data access is enforced by RLS — see docs/auth.md.
+- **The data reset is one SQL function, so it is one transaction, and it keeps only the admins.**
+  `reset_application_data` deletes every account except SUPER_ADMINs, every operator, terminal,
+  route, coach, schedule, crew record and reward, and every transaction; it keeps `app_settings`
+  and `audit_logs`, restarts the reference sequences, and logs `DATA_RESET` — all or nothing.
+  Accounts are deleted from `auth.users` inside that function so they roll back with everything
+  else; only the discount ID photographs, which live in Storage, are removed after commit by
+  `reset-data`. **Delete what points at an account before the account:** several pointers are
+  `ON DELETE SET NULL` and a CASH payment must name its clerk (`payments_cash_has_a_receiver`), so
+  deleting the operator first failed the whole reset — only after `verify-counter` had sold for
+  cash, since the seed has no cash sale; the reset suite now makes one itself. **Supabase loads
+  `pg_safeupdate` for API requests**, so a `DELETE` with no `WHERE` fails from the app while passing
+  as `postgres`; the function says `where true` on purpose. `verify-data-reset` is destructive, runs
+  **last** in `db:verify:all`, and leaves the local database empty — `pnpm db:reset` afterwards.
 - **The database goes first, and `pnpm deploy:check` enforces it.** A client ahead of its schema
   fails closed: it asks PostgREST for a column by name, gets an error, and takes the screen with
   it. A database ahead of its client is harmless. Phase 14's browser verification spent a while
@@ -304,7 +317,7 @@ pnpm check
 
 `typecheck` · `lint` · `test` · `web` · `android` · `db:start` · `db:reset` · `db:types`
 
-`pnpm db:verify:all` runs fifteen suites against the local stack. It needs
+`pnpm db:verify:all` runs seventeen suites against the local stack, the destructive data reset last. It needs
 `pnpm functions:serve` running — and exactly one copy of it: two `supabase functions serve`
 processes fight over the edge-runtime container and take it down, which surfaces as
 `503 name resolution failed` and looks like a broken function.

@@ -895,6 +895,7 @@ export type Database = {
           emergency_contact_phone: string | null
           full_name: string
           id: string
+          is_test_account: boolean
           must_change_password: boolean
           operator_id: string | null
           phone: string | null
@@ -912,6 +913,7 @@ export type Database = {
           emergency_contact_phone?: string | null
           full_name?: string
           id: string
+          is_test_account?: boolean
           must_change_password?: boolean
           operator_id?: string | null
           phone?: string | null
@@ -929,6 +931,7 @@ export type Database = {
           emergency_contact_phone?: string | null
           full_name?: string
           id?: string
+          is_test_account?: boolean
           must_change_password?: boolean
           operator_id?: string | null
           phone?: string | null
@@ -2371,6 +2374,7 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
       }
+      data_reset_preview: { Args: never; Returns: Json }
       delete_bus: { Args: { p_bus_id: string }; Returns: Json }
       delete_operator: { Args: { p_operator_id: string }; Returns: Json }
       delete_trip: { Args: { p_trip_id: string }; Returns: Json }
@@ -2457,6 +2461,10 @@ export type Database = {
         Returns: number
       }
       remove_push_token: { Args: { p_token: string }; Returns: Json }
+      reset_application_data: {
+        Args: { p_confirmation: string }
+        Returns: Json
+      }
       resolve_sos: {
         Args: { p_note?: string; p_sos_id: string }
         Returns: Json

@@ -479,3 +479,10 @@ verify_jwt = false
 # have no other route (create a user, set a password, ban or unban).
 [functions.manage-staff]
 verify_jwt = true
+
+# reset-data empties the application's data. The caller must be a real
+# signed-in session: SUPER_ADMIN and the typed confirmation phrase are both
+# checked in SQL as that caller. The service role is used only to remove the
+# discount ID photographs from Storage after the database has committed.
+[functions.reset-data]
+verify_jwt = true

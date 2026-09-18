@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   MapPin,
   Route,
+  Settings,
   Users,
 } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
@@ -33,6 +34,7 @@ const NAV = [
   { href: '/(admin)/fleet', pathname: '/fleet', label: 'Fleet', icon: Bus },
   { href: '/(admin)/schedules', pathname: '/schedules', label: 'Schedules', icon: CalendarDays },
   { href: '/(admin)/crew', pathname: '/crew', label: 'Crew', icon: Users },
+  { href: '/(admin)/system', pathname: '/system', label: 'System', icon: Settings },
 ] as const satisfies readonly {
   href: Href;
   pathname: string;

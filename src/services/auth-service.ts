@@ -33,6 +33,7 @@ function toProfile(row: ProfileRow): Profile {
     operatorId: row.operator_id,
     accountStatus: row.account_status,
     mustChangePassword: row.must_change_password,
+    isTestAccount: row.is_test_account,
     emergencyContactName: row.emergency_contact_name,
     emergencyContactPhone: row.emergency_contact_phone,
     createdAt: row.created_at,

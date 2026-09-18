@@ -109,7 +109,10 @@ export default function ProfileScreen() {
           </View>
           {/* Role is display-only. The database revokes the column grant that
               would let an account holder change it. */}
-          <Badge label={profile.role} tone="primary" />
+          <View className="items-end gap-1">
+            <Badge label={profile.role} tone="primary" />
+            {profile.isTestAccount ? <Badge label="TEST ACCOUNT" tone="warning" /> : null}
+          </View>
         </View>
       </Card>
 

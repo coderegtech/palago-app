@@ -60,6 +60,11 @@ export interface Profile {
   accountStatus: AccountStatus;
   /** Set when an account is provisioned or reset with a temporary password. */
   mustChangePassword: boolean;
+  /**
+   * The team's testing account. It survives an admin data reset with its history
+   * emptied, and the app labels it so nobody mistakes it for a real passenger.
+   */
+  isTestAccount: boolean;
   emergencyContactName: string | null;
   emergencyContactPhone: string | null;
   createdAt: ISODateTime;

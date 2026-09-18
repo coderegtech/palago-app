@@ -197,8 +197,18 @@ export async function capture(page, { DEVICE, DESKTOP, sleep }) {
 
   await step('counter-sale', async () => {
     await page.go('/assisted-booking');
-    await sleep(3000);
+    await page.waitFor('Travel date', 15_000);
     await page.shot('28-counter-sale');
+  });
+
+  // The same passenger card the app uses — see components/booking/passenger-fields.tsx.
+  await step('counter-passenger-form', async () => {
+    await page.click('Sell on this trip');
+    await page.waitFor('Email (optional)', 15_000);
+    await page.fill('Juan Dela Cruz', 'Anthony Concepcion');
+    await page.fill('0917 123 4567', '09480154134');
+    await page.fill('you@example.com', 'anthony@example.com');
+    await page.shot('29-counter-passenger-form');
   });
 
   // -------------------------------------------------------------------------
@@ -314,5 +324,12 @@ export async function capture(page, { DEVICE, DESKTOP, sleep }) {
     await page.go('/scan');
     await sleep(3000);
     await page.shot('42-driver-scan');
+  });
+
+  // Availability is the driver's own to set; account status stays the operator's.
+  await step('driver-availability', async () => {
+    await page.go('/crew-account');
+    await page.waitFor('Availability', 15_000);
+    await page.shot('43-driver-availability');
   });
 }

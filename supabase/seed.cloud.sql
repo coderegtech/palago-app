@@ -119,6 +119,11 @@ on conflict (code) do nothing;
 
 update public.profiles p set role = 'SUPER_ADMIN' where p.email = 'admin@palago.test';
 
+-- The team's testing account: survives an admin data reset with its history
+-- emptied, so the passenger app can still be tested afterwards. See
+-- 20260918000036_data_reset.sql.
+update public.profiles set is_test_account = true where email = 'passenger@palago.test';
+
 update public.profiles p
 set role = 'OPERATOR_ADMIN', operator_id = (select id from public.operators where code = 'CHERRY')
 where p.email = 'operator@palago.test';

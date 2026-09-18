@@ -90,7 +90,7 @@
     "db:verify": "node scripts/verify-rls.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "db:verify:booking": "node scripts/verify-booking.mjs",
-    "db:verify:all": "node scripts/verify-rls.mjs && node scripts/verify-booking.mjs && node scripts/verify-payment.mjs && node scripts/verify-boarding.mjs && node scripts/verify-operator.mjs && node scripts/verify-tracking.mjs && node scripts/verify-wallet.mjs && node scripts/verify-loyalty.mjs && node scripts/verify-sos.mjs && node scripts/verify-discount.mjs && node scripts/verify-counter.mjs && node scripts/verify-notifications.mjs && node scripts/verify-staff-accounts.mjs && node scripts/verify-schedules.mjs && node scripts/verify-admin.mjs && node scripts/verify-security.mjs",
+    "db:verify:all": "node scripts/verify-rls.mjs && node scripts/verify-booking.mjs && node scripts/verify-payment.mjs && node scripts/verify-boarding.mjs && node scripts/verify-operator.mjs && node scripts/verify-tracking.mjs && node scripts/verify-wallet.mjs && node scripts/verify-loyalty.mjs && node scripts/verify-sos.mjs && node scripts/verify-discount.mjs && node scripts/verify-counter.mjs && node scripts/verify-notifications.mjs && node scripts/verify-staff-accounts.mjs && node scripts/verify-schedules.mjs && node scripts/verify-admin.mjs && node scripts/verify-security.mjs && node scripts/verify-data-reset.mjs",
     "db:verify:payment": "node scripts/verify-payment.mjs",
     "functions:serve": "supabase functions serve --env-file supabase/functions/.env",
     "db:verify:boarding": "node scripts/verify-boarding.mjs",
@@ -113,7 +113,8 @@
     "test:coverage": "jest --coverage",
     "deploy:check": "node scripts/check-deploy.mjs",
     "cloud:check": "node scripts/check-cloud.mjs",
-    "db:types:cloud": "supabase gen types typescript --linked > src/types/database.ts"
+    "db:types:cloud": "supabase gen types typescript --linked > src/types/database.ts",
+    "db:verify:reset": "node scripts/verify-data-reset.mjs"
   },
   "private": true
 }
