@@ -90,3 +90,16 @@ suite depends on one.
 Two seeded rows exist to be *refused* rather than used: RoRo's crew (Pedro Ramos
 and Ana Lim) have no login at all. A roster with people on it who never open the
 app is the normal case, and something has to exercise it.
+
+## The testing account and the data reset
+
+`passenger@palago.test` is flagged `profiles.is_test_account`. The admin console's **System → Reset
+database** deletes every passenger account *except* flagged ones, so this account survives a reset
+with its bookings, payments, points, wallet and notifications emptied — the team can still sign in
+and test the passenger app against a clean database. The app labels it **TEST ACCOUNT** on the home
+screen and profile, so a booking made from it is never mistaken for a real passenger's.
+
+Staff accounts (admin, operators, drivers, crew) also survive a reset. **They still share the
+password `PalawanGo2026`**, which is in this repository — before real use, change every one of them
+or deactivate the ones you do not need. The flag is SQL-only; no client can set it.
+

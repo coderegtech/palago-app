@@ -16,6 +16,7 @@ import {
   type CreateRouteInput,
   type CreateTerminalInput,
 } from '@/services/admin-service';
+import { systemService } from '@/services/system-service';
 import type { OperatorStatus } from '@/constants/enums';
 import type { ISODate } from '@/types/models';
 
@@ -196,5 +197,38 @@ export function useCreateBus() {
   return useMutation({
     mutationFn: (input: CreateBusInput) => adminService.createBus(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: adminKeys.all }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Data reset
+// ---------------------------------------------------------------------------
+
+/**
+ * What a reset would delete and keep. Fetched only while the confirmation
+ * dialog is open, and never cached: the numbers are the admin's last look at
+ * the data before it goes, so a stale count would be the wrong thing to show.
+ */
+export function useDataResetPreview(enabled: boolean) {
+  return useQuery({
+    queryKey: ['admin', 'data-reset-preview'],
+    queryFn: () => systemService.resetPreview(),
+    enabled,
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
+/**
+ * Runs the reset. On success every cached query is dropped, not just the
+ * admin's — bookings, wallets, notifications and dashboards across the app all
+ * describe data that no longer exists.
+ */
+export function useResetData() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (confirmation: string) => systemService.resetData(confirmation),
+    onSuccess: () => queryClient.invalidateQueries(),
   });
 }

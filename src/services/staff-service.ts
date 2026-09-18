@@ -16,9 +16,8 @@
  */
 
 import { AccountStatus, AvailabilityStatus, CrewKind, UserRole } from '@/constants/enums';
-import { env } from '@/lib/env';
-import { AppError, fromRpcError, toAppError } from '@/lib/errors';
-import { ErrorCode } from '@/constants/errors';
+import { fromRpcError, toAppError } from '@/lib/errors';
+import { invokeFunction } from '@/lib/functions';
 import { supabase } from '@/lib/supabase';
 import type { ISODate, UUID } from '@/types/models';
 
@@ -119,12 +118,6 @@ export interface CreateCrewInput {
   operatorId?: UUID;
 }
 
-interface FunctionEnvelope<T> {
-  success: boolean;
-  data?: T;
-  code?: string;
-  message?: string;
-}
 
 /**
  * Calls `manage-staff` with the caller's session.
@@ -134,33 +127,8 @@ interface FunctionEnvelope<T> {
  * `payment-service` does, and turns the envelope into an AppError the screens
  * can branch on.
  */
-async function manageStaff<T>(body: Record<string, unknown>): Promise<T> {
-  const { data: session } = await supabase.auth.getSession();
-  const accessToken = session.session?.access_token;
-  if (!accessToken) throw new AppError(ErrorCode.UNAUTHORIZED);
-
-  let envelope: FunctionEnvelope<T>;
-  try {
-    const response = await fetch(`${env.supabaseUrl}/functions/v1/manage-staff`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: env.supabasePublishableKey,
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(body),
-    });
-    envelope = (await response.json()) as FunctionEnvelope<T>;
-  } catch {
-    throw new AppError(ErrorCode.NETWORK_ERROR);
-  }
-
-  if (!envelope.success) {
-    const code = (envelope.code ?? ErrorCode.INTERNAL_ERROR) as ErrorCode;
-    throw new AppError(code, envelope.message);
-  }
-
-  return envelope.data as T;
+function manageStaff<T>(body: Record<string, unknown>): Promise<T> {
+  return invokeFunction<T>('manage-staff', body);
 }
 
 export const staffService = {

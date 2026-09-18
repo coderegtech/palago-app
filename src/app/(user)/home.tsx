@@ -188,6 +188,16 @@ export default function HomeScreen() {
           <Text variant="body" tone="muted">
             Where are you travelling today?
           </Text>
+          {/*
+            The team's testing account survives a data reset and is used to
+            check the app against real data, so it says what it is — a booking
+            made from it must never be mistaken for a real passenger's.
+          */}
+          {profile?.isTestAccount ? (
+            <View className="mt-1 flex-row">
+              <Badge label="TEST ACCOUNT" tone="warning" />
+            </View>
+          ) : null}
         </View>
 
 {/* Both figures are read from the database — neither is invented. */}
