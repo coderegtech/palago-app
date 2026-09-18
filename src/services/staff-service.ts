@@ -176,7 +176,11 @@ export const staffService = {
    * the only place the two statuses appear together.
    */
   async listCrew(kind?: CrewKind): Promise<CrewMember[]> {
-    let query = supabase.from('operator_crew').select(CREW_COLUMNS).order('name');
+    // Newest first — a crew member just added is the one being looked for.
+    let query = supabase
+      .from('operator_crew')
+      .select(CREW_COLUMNS)
+      .order('updated_at', { ascending: false });
     if (kind) query = query.eq('crew_kind', kind);
 
     const { data, error } = await query;

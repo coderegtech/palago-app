@@ -204,7 +204,12 @@ export const adminService = {
     const { data, error } = await supabase
       .from('operators')
       .select('id, name, code, status, contact_phone, contact_email')
-      .order('name');
+      // Newest first: these are management tables, and the row you just added
+      // or edited is the one you are looking for. `updated_at` rather than
+      // `created_at` so an edit brings a row back to the top. The dropdown
+      // versions of these lists live in trip-service and stay alphabetical —
+      // there you are looking for a terminal you already know the name of.
+      .order('updated_at', { ascending: false });
 
     if (error) throw toAppError(error);
     return data.map((row) => ({
@@ -298,7 +303,12 @@ export const adminService = {
     const { data, error } = await supabase
       .from('terminals')
       .select('id, name, code, city, province, latitude, longitude, status')
-      .order('name');
+      // Newest first: these are management tables, and the row you just added
+      // or edited is the one you are looking for. `updated_at` rather than
+      // `created_at` so an edit brings a row back to the top. The dropdown
+      // versions of these lists live in trip-service and stay alphabetical —
+      // there you are looking for a terminal you already know the name of.
+      .order('updated_at', { ascending: false });
 
     if (error) throw toAppError(error);
     return data.map((row) => ({
@@ -361,7 +371,12 @@ export const adminService = {
           'origin:terminals!routes_origin_terminal_id_fkey(code, name), ' +
           'destination:terminals!routes_destination_terminal_id_fkey(code, name)',
       )
-      .order('created_at');
+      // Newest first: these are management tables, and the row you just added
+      // or edited is the one you are looking for. `updated_at` rather than
+      // `created_at` so an edit brings a row back to the top. The dropdown
+      // versions of these lists live in trip-service and stay alphabetical —
+      // there you are looking for a terminal you already know the name of.
+      .order('updated_at', { ascending: false });
 
     if (error) throw toAppError(error);
 
@@ -421,7 +436,12 @@ export const adminService = {
     const { data, error } = await supabase
       .from('buses')
       .select('id, operator_id, plate_number, bus_number, name, bus_type, capacity, status, operators(name)')
-      .order('bus_number');
+      // Newest first: these are management tables, and the row you just added
+      // or edited is the one you are looking for. `updated_at` rather than
+      // `created_at` so an edit brings a row back to the top. The dropdown
+      // versions of these lists live in trip-service and stay alphabetical —
+      // there you are looking for a terminal you already know the name of.
+      .order('updated_at', { ascending: false });
 
     if (error) throw toAppError(error);
     return data.map((row) => ({

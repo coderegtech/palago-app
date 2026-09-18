@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { ObserveInteractiveMarker } from 'expo-observe';
 import { router } from 'expo-router';
 import { ChevronRight, Clock, Users } from 'lucide-react-native';
@@ -12,6 +13,7 @@ import { Text } from '@/components/ui/text';
 import { TripStatus } from '@/constants/enums';
 import { Colors } from '@/constants/theme';
 import { useMyAssignments } from '@/hooks/use-tracking';
+import { compareDriverTrips } from '@/utils/trip-order';
 import type { DriverAssignment } from '@/services/tracking-service';
 import { formatDateShort, formatTime, todayISO } from '@/utils/datetime';
 
@@ -79,13 +81,25 @@ function AssignmentRow({ trip }: { trip: DriverAssignment }) {
 
 export default function DutyScreen() {
   const assignments = useMyAssignments();
+  // What needs doing first — the trip being driven, then boarding, then the
+  // rest of the roster — rather than a calendar. See utils/trip-order.ts.
+  const roster = useMemo(
+    () =>
+      [...(assignments.data ?? [])].sort((a, b) =>
+        compareDriverTrips(
+          { status: a.tripStatus, departureDate: a.departureDate, departureTime: a.departureTime },
+          { status: b.tripStatus, departureDate: b.departureDate, departureTime: b.departureTime },
+        ),
+      ),
+    [assignments.data],
+  );
 
   return (
     <Screen padded={false}>
       {/* Crew land here on a cold start; TTI is when the roster is on screen. */}
       {!assignments.isPending && <ObserveInteractiveMarker />}
       <FlatList
-        data={assignments.data ?? []}
+        data={roster}
         keyExtractor={(item) => item.assignmentId}
         contentContainerClassName="px-4 pb-8 gap-3"
         showsVerticalScrollIndicator={false}
