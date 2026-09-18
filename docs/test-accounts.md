@@ -105,3 +105,30 @@ who provision their own drivers and crew, and a new test account can be flagged 
 
 Until then, every seeded account shares the password `PalawanGo2026`, which is in this repository.
 On any project people will actually use, change the admin password first.
+
+## Generating mock data
+
+`pnpm db:mock` fills the database with a realistic batch — operators, terminals, routes, coaches, a
+week of schedules with crew rostered, operator admins, drivers and crew, passengers with wallets,
+bookings paid by the mock provider and by wallet, some cancelled or left unpaid, and walk-ins sold
+at the counter for cash.
+
+```bash
+pnpm db:mock -- --operators 3 --buses 3 --days 7 --passengers 20 --seed 42
+```
+
+It inserts nothing directly. Every row comes from the RPC or Edge Function the app itself calls,
+signed in as the person who would make it — the admin, each operator admin, each passenger — so the
+data obeys every rule real data does (priced by `create_booking`, seats assigned on payment, no bus
+or driver double-booked, a receipt for every payment). It therefore needs `pnpm functions:serve`
+running, and it works on an empty platform straight after **System → Reset database**.
+
+- **Local by default**, resolved exactly like the verify suites. `--target cloud --yes` writes to
+  the project in `.env` and needs `MOCK_ADMIN_EMAIL` / `MOCK_ADMIN_PASSWORD` for a SUPER_ADMIN there.
+- **Every generated account** uses `@mock.palago.test` and the password `PalawanGo2026` (override with
+  `MOCK_PASSWORD`). The run prints the operator admin logins. Remove a batch with the data reset.
+- **Repeatable and additive.** `--seed` fixes the randomness; a per-run tag in codes and e-mails means
+  a second run adds a second batch rather than colliding. Terminals are reused by code.
+- **Not generated:** rewards (the catalogue is SQL-only) and completed-trip history (trips cannot be
+  scheduled in the past), so loyalty points start at zero.
+- A refused step is listed at the end and the command exits non-zero; it never fakes the row.
