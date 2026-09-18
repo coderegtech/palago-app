@@ -38,12 +38,19 @@ Sign in with any of the seeded accounts — all share the password
 `PalawanGo2026`. The full list, and what each one is for, is in
 [test-accounts.md](test-accounts.md).
 
-| Account | Lands on |
-|---|---|
-| `passenger@palago.test` | The passenger app |
-| `operator@palago.test` | Cherry Bus's console |
-| `admin@palago.test` | The platform console |
-| `driver@palago.test` | The crew app |
+| Account | Role | Lands on |
+|---|---|---|
+| `passenger@palago.test` | `USER` | The passenger app |
+| `operator@palago.test` | `OPERATOR_ADMIN` | Cherry Bus's console |
+| `admin@palago.test` | `SUPER_ADMIN` | The platform console |
+| `driver@palago.test` | `DRIVER` | The crew app |
+| `assistant@palago.test` | `CREW` | The crew app |
+
+The hierarchy in one line: **the super admin creates operators; each operator
+admin runs their own company** — its coaches, drivers, crew, schedules and
+counter sales — **and never sees another's; drivers and crew see only their own
+trips.** Every one of those boundaries is enforced in the database, not by
+hiding a button.
 
 ---
 
@@ -64,7 +71,12 @@ operator or an administrator.
 <img src="screenshots/02-home.png" width="320" alt="Passenger home screen with wallet, points and upcoming trips" />
 
 Wallet balance and loyalty points are read from the database, not accumulated
-in the app. Upcoming trips show the next two bookings. The bell carries an
+in the app. Upcoming trips show the next two bookings. Every card here is itself
+the tap target — search, the upcoming booking, the operator cards, wallet and
+points — which matters more on a phone than it looks: a card with a pressed-state
+style nested inside another tappable wrapper swallowed the tap on Android while
+working perfectly in a browser. A test now reads the source for that pattern,
+because no browser test can see it. The bell carries an
 unread count, and the count is in its accessibility label too — a badge is
 never the only way to know something is waiting.
 
@@ -254,11 +266,36 @@ is refused at today's door, and the refusal is logged rather than thrown away.
 Boarding is recorded per passenger, so a family of four aboard is four people,
 not one booking.
 
-<img src="screenshots/28-counter-sale.png" width="900" alt="Assisted booking at the counter" />
+### Manual booking at the counter
 
-Counter sales are for passengers with no smartphone. Cash is the one payment in
-this build that is real money: the record names the clerk who took it, and only
-an operator manager or an admin can write one.
+For a passenger with no smartphone, no account, or no way to pay online. The
+clerk uses **the same flow the passenger app uses**, not a counter-shaped copy
+of it.
+
+<img src="screenshots/28-counter-sale.png" width="900" alt="Counter sale: origin, destination and travel date, then this operator's sellable trips" />
+
+The same three questions as the passenger search, in the same order — from, to,
+travel date — with the same seven days to choose from. The trips offered are
+only this operator's own, only ones still sellable, and only ones with a seat
+left; widening the search cannot widen what a clerk is allowed to sell.
+
+<img src="screenshots/29-counter-passenger-form.png" width="900" alt="The passenger app's own details card, used at the counter" />
+
+This is the passenger app's own details card — full name, passenger type,
+mobile and email, both optional — with the same validation. A rule that changes
+for passengers changes here without anyone remembering to. No account is
+created: the booking is recorded as an **operator booking**, with no account
+holder and the clerk's name as its creator.
+
+Payment offers Cash, GCash, Maya, Card and Bank transfer. **Only cash is real.**
+Choosing any of the others raises *"TEST PAYMENT — NO REAL MONEY WILL BE
+CHARGED"* before the clerk can confirm, and choosing cash raises its own warning
+naming the amount — because that tap is the record that notes changed hands, and
+it is stored against the clerk who took them.
+
+Seats follow exactly the passenger rules: a taken seat cannot be picked, and
+availability is checked again at the moment of sale, so two clerks and a
+passenger reaching for the same seat produce one ticket.
 
 ---
 
@@ -276,8 +313,8 @@ own dashboard, so the two consoles cannot drift apart about money.
 
 <img src="screenshots/31-admin-operators.png" width="900" alt="Operator management with view, edit, add login and deactivate actions" />
 
-Only an administrator creates an operator, and only an administrator creates
-the login that lets that company into its own console. There is no public
+Only the super admin creates an operator, and only the super admin creates the
+login that lets that company into its own console. There is no public
 operator registration and no self-service route to one.
 
 <img src="screenshots/32-add-operator-login.png" width="900" alt="Add a login dialog for an operator" />
@@ -324,19 +361,31 @@ An administrator can see everybody and close a door. The day-to-day of a roster
 A coach can be moved between companies, but only while it is on nobody's
 schedule — otherwise its trips would point at another company's bus.
 
-**Nothing in this console deletes anything.** Operators, terminals, routes,
-coaches and departures are all referenced by bookings, payments, tickets and
-boarding scans. Every "Delete" is a deactivation, every confirmation dialog
-says so, and every change goes through an audited function.
+**Delete removes only what nothing points at.** Operators, coaches and
+departures are referenced by bookings, payments, tickets and boarding scans. A
+coach added by mistake and never scheduled can be deleted; one that has carried
+passengers is refused with the reason — *"this coach is on 3 scheduled trips,
+set it inactive instead"* — and deactivated instead. Every change goes through
+an audited function.
+
+Management lists across both consoles show **the newest first**, so the row you
+just added or edited is at the top. Lists where another order means something —
+departures by time, seats by number, the discount review queue oldest-first so
+nobody waits forever — keep it.
 
 ---
 
 ## 4. Driver and crew — at the bus
 
-<img src="screenshots/40-driver-duty.png" width="320" alt="Driver's assigned trips" />
+<img src="screenshots/40-driver-duty.png" width="320" alt="Driver's trips ordered by status: departed first, then scheduled, then arrived" />
 
 Deliberately separate from the operator console: crew must not see revenue and
 fleet. They see their own assignments and nothing else.
+
+The list is ordered by **what needs doing**, not by the calendar: the trip being
+driven first, then boarding, then scheduled (soonest first), then arrived — which
+still needs ending — then completed and cancelled (most recent first). Sorted by
+date alone, the trip you are on right now sits wherever this morning falls.
 
 <img src="screenshots/41-driver-trip.png" width="320" alt="One trip: status, position sharing, and the trip lifecycle buttons" />
 
@@ -350,6 +399,14 @@ their loyalty points.
 <img src="screenshots/42-driver-scan.png" width="320" alt="Door scanner in the crew app" />
 
 The same scanner and the same server checks as the operator's terminal.
+
+<img src="screenshots/43-driver-availability.png" width="320" alt="Driver's own availability switch on the account screen" />
+
+A driver or crew member sets their **own availability**. Going off-shift needs
+nobody's permission: they mark themselves unavailable and are not rostered onto
+new trips. It does not sign them out and does not take them off a trip they are
+already on — those stay with the operator, which is exactly why availability and
+account status are two separate fields.
 
 ---
 
@@ -370,7 +427,7 @@ nobody can reach is worse than no screenshot.
 The shot list is [`scripts/walkthrough-steps.mjs`](../scripts/walkthrough-steps.mjs),
 written to read like this document. A broken step prints `!!` with its reason
 and the rest carry on, so one bad selector costs one picture rather than
-thirty-six.
+thirty-eight.
 
 ```bash
 WALKTHROUGH_ONLY=operator pnpm docs:screens
