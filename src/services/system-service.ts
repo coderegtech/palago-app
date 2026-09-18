@@ -15,7 +15,14 @@ export const RESET_CONFIRMATION_PHRASE = 'RESET DATABASE';
 
 export interface DataResetPreview {
   delete: {
-    passengerAccounts: number;
+    accounts: number;
+    operators: number;
+    terminals: number;
+    routes: number;
+    buses: number;
+    trips: number;
+    crewRecords: number;
+    rewards: number;
     bookings: number;
     payments: number;
     receipts: number;
@@ -28,17 +35,10 @@ export interface DataResetPreview {
     gpsPoints: number;
     discountSubmissions: number;
   };
+  /** Only SUPER_ADMIN accounts survive a reset. */
   keep: {
     superAdmins: number;
-    staffAccounts: number;
-    testAccounts: number;
-    testAccountEmails: string[];
-    operators: number;
-    terminals: number;
-    routes: number;
-    buses: number;
-    trips: number;
-    rewards: number;
+    superAdminEmails: string[];
   };
 }
 

@@ -14,14 +14,14 @@
  *      refused — asserted by counting rows before and after, not by reading
  *      the error, because a refusal that quietly deleted something would pass
  *      an error-message check.
- *   2. It takes exactly what it says: every transactional table empty,
- *      passenger accounts gone and unable to sign in, the ID photograph gone
- *      from Storage and not merely its row.
- *   3. It leaves exactly what it says: admin, staff and the test account can
- *      sign in; operators, terminals, routes, coaches, trips and the rewards
- *      catalogue are untouched; "not for sale" seats are still not for sale.
- *   4. It starts clean: the test account has no history and a zero balance,
- *      the wallet invariant holds, and the next booking is number 000001.
+ *   2. It takes everything except the admins: every other account (passengers,
+ *      operator admins, drivers, crew, the test account), every operator,
+ *      terminal, route, coach, schedule and reward, every transaction, and the
+ *      ID photograph from Storage rather than merely its row.
+ *   3. It keeps the admins, the settings and the audit log.
+ *   4. The empty platform is usable: an admin can enter an operator, terminals,
+ *      a route, a coach and a trip from nothing, and the first booking on it is
+ *      number 000001.
  *   5. It leaves a record of who did it.
  */
 
@@ -91,15 +91,46 @@ const submitted = await passenger2.supabase.rpc('submit_discount_proof', {
 });
 check('and submit it for a discount', !submitted.error, submitted.error?.message);
 
+// A cash sale at the counter, taken by an operator who is about to be deleted.
+// A CASH payment must name the clerk who took it, and deleting the clerk first
+// would null `received_by` and fail the reset. The seed has no cash sale, so
+// without this the suite passed on its own while the reset failed in the full
+// sweep — after verify-counter had sold one.
+const { data: sellable } = await operator.supabase
+  .from('operator_trip_overview')
+  .select('id, status, seats_available')
+  .in('status', ['SCHEDULED', 'BOARDING'])
+  .gt('seats_available', 0)
+  .limit(1);
+const walkIn = await operator.supabase.rpc('create_booking', {
+  p_trip_id: sellable?.[0]?.id,
+  p_passengers: [{ name: 'Walk-in Passenger', type: 'ADULT' }],
+  p_seat_ids: null,
+  p_walk_in: true,
+  p_source: 'OPERATOR',
+  p_ticket_type: 'PRINTED',
+});
+const walkInId = walkIn.data?.bookingId ?? walkIn.data?.id;
+const cash = await operator.supabase.rpc('record_counter_payment', {
+  p_booking_id: walkInId,
+  p_method: 'CASH',
+});
+check('an operator sells a seat for cash before the reset', !walkIn.error && !cash.error, walkIn.error?.message ?? cash.error?.message);
+
 const before = await counts();
 check(
   'there is demo data to reset',
-  before?.delete?.bookings > 0 && before?.delete?.passengerAccounts > 0,
+  before?.delete?.bookings > 0 && before?.delete?.accounts > 0 && before?.delete?.operators > 0,
   JSON.stringify(before?.delete),
 );
-check('the seeded passenger is the test account', (before?.keep?.testAccountEmails ?? []).includes('passenger@palago.test'), JSON.stringify(before?.keep?.testAccountEmails));
+check(
+  'only the admin is listed as kept',
+  JSON.stringify(before?.keep?.superAdminEmails) === JSON.stringify(['admin@palago.test']),
+  JSON.stringify(before?.keep),
+);
 
-const keptBefore = before?.keep ?? {};
+const turnaroundBefore = (await admin.supabase.rpc('public_setting', { p_key: 'trip_turnaround_minutes' })).data;
+
 
 // ---------------------------------------------------------------------------
 console.log('\nOnly a SUPER_ADMIN, and only with the phrase');
@@ -157,8 +188,17 @@ for (const [table, n] of Object.entries(after?.delete ?? {})) {
   check(`${table}: none left`, n === 0, String(n));
 }
 
-const gone = await signIn('passenger2@palago.test');
-check('an ordinary passenger account is gone and cannot sign in', Boolean(gone.error), 'it signed in');
+for (const email of [
+  'passenger@palago.test',
+  'passenger2@palago.test',
+  'operator@palago.test',
+  'roro@palago.test',
+  'driver@palago.test',
+  'assistant@palago.test',
+]) {
+  const s = await signIn(email);
+  check(`${email} is gone and cannot sign in`, Boolean(s.error), 'it signed in');
+}
 
 const stillThere = await admin.supabase.storage.from('discount-proofs').list(passenger2.userId);
 check(
@@ -167,59 +207,70 @@ check(
   JSON.stringify(stillThere.data ?? stillThere.error),
 );
 
-// ---------------------------------------------------------------------------
-console.log('\nWhat it left');
-// ---------------------------------------------------------------------------
-
-for (const email of ['admin@palago.test', 'operator@palago.test', 'driver@palago.test', 'passenger@palago.test']) {
-  const s = await signIn(email);
-  check(`${email} can still sign in`, !s.error, s.error?.message);
-}
-
-for (const key of ['superAdmins', 'staffAccounts', 'testAccounts', 'operators', 'terminals', 'routes', 'buses', 'trips', 'rewards']) {
-  check(`${key} untouched`, after?.keep?.[key] === keptBefore[key], `${keptBefore[key]} -> ${after?.keep?.[key]}`);
-}
-
-// Seat state is only readable through the trip views; the admin reads the table.
-const { data: seatStates } = await admin.supabase.from('trip_seats').select('status');
-const byStatus = (seatStates ?? []).reduce((a, s) => ((a[s.status] = (a[s.status] ?? 0) + 1), a), {});
-check('no seat is held or sold', !byStatus.HELD && !byStatus.BOOKED, JSON.stringify(byStatus));
-check('"not for sale" seats are still not for sale', (byStatus.BLOCKED ?? 0) > 0, JSON.stringify(byStatus));
+const { data: seats } = await admin.supabase.from('trip_seats').select('id');
+check('no seat inventory is left', (seats ?? []).length === 0, String(seats?.length));
 
 // ---------------------------------------------------------------------------
-console.log('\nThe test account starts clean');
+console.log('\nWhat it kept');
 // ---------------------------------------------------------------------------
 
-const t = await signIn('passenger@palago.test');
-const { data: tp } = await t.supabase.from('profiles').select('is_test_account').eq('id', t.userId).single();
-check('it is still marked as the test account', tp?.is_test_account === true, JSON.stringify(tp));
+const adminAgain = await signIn('admin@palago.test');
+check('the admin can still sign in', !adminAgain.error, adminAgain.error?.message);
+check('and is the only account kept', after?.keep?.superAdmins === 1, JSON.stringify(after?.keep));
 
-const { data: wallet } = await t.supabase.from('wallets').select('balance').eq('user_id', t.userId).single();
-check('its wallet balance is zero', wallet?.balance === 0, JSON.stringify(wallet));
+const turnaroundAfter = (await adminAgain.supabase.rpc('public_setting', { p_key: 'trip_turnaround_minutes' })).data;
+check(
+  'settings are kept',
+  turnaroundAfter !== null && turnaroundAfter === turnaroundBefore,
+  `${turnaroundBefore} -> ${turnaroundAfter}`,
+);
 
-const { data: ledger } = await t.supabase.from('wallet_transactions').select('amount');
-check('and its ledger is empty, so sum(amount) = balance still holds', (ledger ?? []).length === 0, String(ledger?.length));
+// ---------------------------------------------------------------------------
+console.log('\nThe empty platform is usable');
+// ---------------------------------------------------------------------------
 
-const { data: loyalty } = await t.supabase.from('loyalty_accounts').select('points_balance, lifetime_points').eq('user_id', t.userId).single();
-check('its points are zero', loyalty?.points_balance === 0 && loyalty?.lifetime_points === 0, JSON.stringify(loyalty));
+const a = adminAgain.supabase;
+const stamp = Date.now().toString(36).slice(-4).toUpperCase();
 
-const { data: myBookings } = await t.supabase.from('bookings').select('id');
-check('it has no bookings', (myBookings ?? []).length === 0, String(myBookings?.length));
+const op = await a.rpc('create_operator', { p_name: 'First Real Operator', p_code: `REAL${stamp}` });
+check('an admin can enter an operator into the empty platform', !op.error, op.error?.message);
+const operatorId = op.data?.id;
 
-const { data: myNotes } = await t.supabase.from('notifications').select('id');
-check('and no notifications', (myNotes ?? []).length === 0, String(myNotes?.length));
+const t1 = await a.rpc('create_terminal', {
+  p_name: 'Origin Terminal', p_code: `O${stamp}`, p_city: 'Puerto Princesa', p_latitude: 9.74, p_longitude: 118.74,
+});
+const t2 = await a.rpc('create_terminal', {
+  p_name: 'Destination Terminal', p_code: `D${stamp}`, p_city: 'El Nido', p_latitude: 11.2, p_longitude: 119.4,
+});
+check('and terminals', !t1.error && !t2.error, t1.error?.message ?? t2.error?.message);
+
+const route = await a.rpc('create_route', {
+  p_operator_id: operatorId, p_origin_terminal_id: t1.data?.id, p_destination_terminal_id: t2.data?.id, p_duration_minutes: 300,
+});
+check('and a route', !route.error, route.error?.message);
+
+const bus = await a.rpc('create_bus', {
+  p_operator_id: operatorId, p_plate_number: `PLT-${stamp}`, p_bus_number: `B-${stamp}`, p_capacity: 20,
+});
+check('and a coach', !bus.error, bus.error?.message);
+
+const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+const trip = await a.rpc('create_trip', {
+  p_route_id: route.data?.id,
+  p_bus_id: bus.data?.id,
+  p_trip_number: `FIRST-${stamp}`,
+  p_departure_date: tomorrow,
+  p_departure_time: '07:00',
+  p_arrival_time: '12:00',
+  p_fare: 60000,
+  p_operator_id: operatorId,
+});
+check('and a trip', !trip.error, trip.error?.message);
 
 // Reference numbers restarted: the first booking after a reset is 000001.
-const { data: trips } = await t.supabase
-  .from('trip_search')
-  .select('id')
-  .in('status', ['SCHEDULED', 'BOARDING'])
-  .eq('is_active', true)
-  .gt('available_seats', 0)
-  .limit(1);
-const booked = await t.supabase.rpc('create_booking', {
-  p_trip_id: trips?.[0]?.id,
-  p_passengers: [{ name: 'Fresh Start', type: 'ADULT' }],
+const booked = await a.rpc('create_booking', {
+  p_trip_id: trip.data?.id,
+  p_passengers: [{ name: 'First Passenger', type: 'ADULT' }],
   p_seat_ids: null,
   p_walk_in: false,
   p_source: 'MOBILE_APP',
@@ -241,7 +292,12 @@ const { data: log } = await admin.supabase
   .single();
 check('the reset is in the audit log', Boolean(log), 'no DATA_RESET entry');
 check('naming the admin who ran it', log?.actor_user_id === admin.userId, log?.actor_user_id);
-check('with what it deleted', log?.metadata?.deleted?.bookings === before.delete.bookings, JSON.stringify(log?.metadata?.deleted));
+check(
+  'with what it deleted',
+  log?.metadata?.deleted?.bookings === before.delete.bookings &&
+    log?.metadata?.scope === 'EVERYTHING_EXCEPT_SUPER_ADMINS',
+  JSON.stringify(log?.metadata),
+);
 
 console.log(`\n${passed} passed, ${failures.length} failed`);
 console.log('\n  The local database is now empty of demo data. `pnpm db:reset` restores the seed.\n');

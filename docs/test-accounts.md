@@ -93,13 +93,15 @@ app is the normal case, and something has to exercise it.
 
 ## The testing account and the data reset
 
-`passenger@palago.test` is flagged `profiles.is_test_account`. The admin console's **System → Reset
-database** deletes every passenger account *except* flagged ones, so this account survives a reset
-with its bookings, payments, points, wallet and notifications emptied — the team can still sign in
-and test the passenger app against a clean database. The app labels it **TEST ACCOUNT** on the home
-screen and profile, so a booking made from it is never mistaken for a real passenger's.
+`passenger@palago.test` is flagged `profiles.is_test_account`, and the app labels a flagged account
+**TEST ACCOUNT** on the home screen and profile so a booking made from it is never mistaken for a
+real passenger's. The flag is SQL-only; no client can set it.
 
-Staff accounts (admin, operators, drivers, crew) also survive a reset. **They still share the
-password `PalawanGo2026`**, which is in this repository — before real use, change every one of them
-or deactivate the ones you do not need. The flag is SQL-only; no client can set it.
+The admin console's **System → Reset database** deletes **everything except SUPER_ADMIN accounts**
+— every other account including this test account, every operator, terminal, route, coach,
+schedule, crew record and reward, and every booking, payment and record. Settings and the audit log
+are kept. After a reset, only `admin@palago.test` can sign in; it provisions the real operators,
+who provision their own drivers and crew, and a new test account can be flagged by SQL if wanted.
 
+Until then, every seeded account shares the password `PalawanGo2026`, which is in this repository.
+On any project people will actually use, change the admin password first.

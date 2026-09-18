@@ -42,7 +42,14 @@ import {
 import { timeAgo } from '@/utils/datetime';
 
 const DELETE_LABELS: [keyof DataResetPreview['delete'], string][] = [
-  ['passengerAccounts', 'Passenger accounts'],
+  ['accounts', 'Accounts (everyone except admins)'],
+  ['operators', 'Operators'],
+  ['terminals', 'Terminals'],
+  ['routes', 'Routes'],
+  ['buses', 'Coaches and seat layouts'],
+  ['trips', 'Schedules'],
+  ['crewRecords', 'Driver and crew records'],
+  ['rewards', 'Rewards catalogue'],
   ['bookings', 'Bookings'],
   ['payments', 'Payments'],
   ['receipts', 'Receipts'],
@@ -54,18 +61,6 @@ const DELETE_LABELS: [keyof DataResetPreview['delete'], string][] = [
   ['boardingScans', 'Boarding scans'],
   ['gpsPoints', 'GPS positions'],
   ['discountSubmissions', 'Discount ID submissions'],
-];
-
-const KEEP_LABELS: [keyof Omit<DataResetPreview['keep'], 'testAccountEmails'>, string][] = [
-  ['superAdmins', 'Admin accounts'],
-  ['staffAccounts', 'Operator, driver and crew accounts'],
-  ['testAccounts', 'Test accounts (history emptied)'],
-  ['operators', 'Operators'],
-  ['terminals', 'Terminals'],
-  ['routes', 'Routes'],
-  ['buses', 'Coaches and seat layouts'],
-  ['trips', 'Schedules (every seat freed)'],
-  ['rewards', 'Rewards catalogue'],
 ];
 
 function CountRow({ label, value }: { label: string; value: number }) {
@@ -125,10 +120,12 @@ export default function SystemScreen() {
             tone="success"
             title="The database was reset"
             message={
-              `${result.deleted.bookings.toLocaleString()} bookings, ` +
-              `${result.deleted.passengerAccounts.toLocaleString()} passenger accounts and every ` +
-              `payment, point, notification and emergency record were deleted ` +
-              `${timeAgo(result.resetAt)}. Reference numbers start again at 000001.` +
+              `${result.deleted.accounts.toLocaleString()} accounts, ` +
+              `${result.deleted.operators.toLocaleString()} operators, ` +
+              `${result.deleted.trips.toLocaleString()} schedules and ` +
+              `${result.deleted.bookings.toLocaleString()} bookings were deleted ` +
+              `${timeAgo(result.resetAt)}, with everything that belonged to them. Only admin ` +
+              `accounts remain. Reference numbers start again at 000001.` +
               (result.proofFiles.failed > 0
                 ? ` ${result.proofFiles.failed} ID photograph(s) could not be removed from storage and need deleting by hand — see the reset-data function log.`
                 : '')
@@ -150,14 +147,13 @@ export default function SystemScreen() {
           </View>
 
           <Text variant="body">
-            Permanently deletes every booking, payment, receipt, point, wallet movement,
-            notification, emergency record and boarding scan, and every passenger account except
-            the test account.
+            Permanently deletes everything except the admin accounts: every passenger, operator,
+            driver and crew account, every operator, terminal, route, coach, schedule and reward, and
+            every booking, payment, point, notification and emergency record.
           </Text>
           <Text variant="body" tone="muted">
-            Keeps the admin and staff accounts, operators, terminals, routes, coaches, schedules and
-            the rewards catalogue. The test account stays, with its history emptied, so the app can
-            still be tested afterwards. The reset is recorded in the audit log under your name.
+            Only admin accounts remain, ready to enter the real operators, routes and schedules.
+            Settings and the audit log are kept, and the reset is recorded there under your name.
           </Text>
 
           <Button
@@ -207,18 +203,13 @@ export default function SystemScreen() {
                 <Text variant="label" tone="muted" className="mb-1">
                   Will be kept
                 </Text>
-                {KEEP_LABELS.map(([key, label]) => (
-                  <CountRow key={key} label={label} value={preview.data.keep[key]} />
-                ))}
-                {preview.data.keep.testAccountEmails.length > 0 ? (
-                  <Text variant="caption" tone="muted" className="mt-1">
-                    Test account: {preview.data.keep.testAccountEmails.join(', ')}
-                  </Text>
-                ) : (
-                  <Text variant="caption" tone="danger" className="mt-1">
-                    No test account is marked, so no passenger account will survive the reset.
-                  </Text>
-                )}
+                <CountRow label="Admin accounts" value={preview.data.keep.superAdmins} />
+                <Text variant="caption" tone="muted" className="mt-1">
+                  {preview.data.keep.superAdminEmails.join(', ')}
+                </Text>
+                <Text variant="caption" tone="muted" className="mt-1">
+                  Settings and the audit log are also kept.
+                </Text>
               </View>
 
               <Input
