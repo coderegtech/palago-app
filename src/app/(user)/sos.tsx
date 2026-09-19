@@ -48,6 +48,42 @@ const statusPresentation: Record<SOSStatus, { label: string; tone: BadgeTone }> 
  */
 type Stage = 'idle' | 'locating' | 'sending';
 
+/**
+ * How long to wait for a fresh fix before settling for the last known one.
+ *
+ * `getCurrentPositionAsync` has no timeout of its own. Indoors, in a coach with
+ * a metal roof, or with location services switched off it can take minutes or
+ * never answer at all — and the button sat on "Getting your location…" for as
+ * long as it did, with the alert unsent.
+ */
+const LOCATION_TIMEOUT_MS = 12_000;
+
+class LocationUnavailableError extends Error {}
+
+async function locateForSOS(): Promise<{ latitude: number; longitude: number }> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), LOCATION_TIMEOUT_MS);
+  });
+
+  try {
+    const fresh = await Promise.race([
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null),
+      timeout,
+    ]);
+    if (fresh) return fresh.coords;
+
+    // A fix from a few minutes ago beats no alert at all. Web has no cache, so
+    // this is null there and the error below explains what to do.
+    const last = await Location.getLastKnownPositionAsync().catch(() => null);
+    if (last) return last.coords;
+  } finally {
+    clearTimeout(timer);
+  }
+
+  throw new LocationUnavailableError();
+}
+
 function IncidentRow({ incident }: { incident: SOSIncident }) {
   const presentation = statusPresentation[incident.status];
   const cancel = useCancelSOS();
@@ -134,25 +170,31 @@ export default function SOSScreen() {
         return;
       }
 
-      const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
+      const coords = await locateForSOS();
 
       setStage('sending');
 
       const result = await trigger.mutateAsync({
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
       });
 
       showToast({
         tone: result.alreadyOpen ? 'info' : 'success',
         title: result.alreadyOpen ? 'Your alert is already open' : 'Emergency alert sent',
         message: result.alreadyOpen
-          ? 'The operator already has it. Someone will be in touch.'
-          : 'Your location has been shared with the operator.',
+          ? 'The operator already has it. Its status below changes when they respond.'
+          : 'Your location has been sent to the operator and the crew on your trip.',
       });
     } catch (error) {
+      if (error instanceof LocationUnavailableError) {
+        // Not a connection problem, and saying so would send someone in
+        // trouble to fix the wrong thing.
+        setLocationError(
+          'We could not find your location, so the alert was not sent. Turn on location services, move nearer a window if you can, and press SOS again. If you are in danger, call emergency services now.',
+        );
+        return;
+      }
       showToast({
         tone: 'danger',
         title: 'Could not send the alert',

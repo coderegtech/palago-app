@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { ChevronRight, Clock, Users } from 'lucide-react-native';
 import { FlatList, Pressable, View } from 'react-native';
 
+import { SOSMonitor } from '@/components/common/sos-monitor';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Header } from '@/components/ui/header';
@@ -106,7 +107,12 @@ export default function DutyScreen() {
         refreshing={assignments.isFetching}
         onRefresh={() => assignments.refetch()}
         ListHeaderComponent={
-          <Header title="My trips" subtitle="Trips assigned to you" />
+          <View className="gap-3">
+            <Header title="My trips" subtitle="Trips assigned to you" />
+            {/* The crew are the nearest help there is — an alert on their coach
+                shows here first, above the roster. */}
+            <SOSMonitor emptyHint="An alert raised by a passenger on your trips appears here." />
+          </View>
         }
         renderItem={({ item }) => <AssignmentRow trip={item} />}
         ListEmptyComponent={

@@ -34,6 +34,21 @@ export interface SOSIncident {
   resolvedAt: string | null;
 }
 
+/**
+ * An incident as a responder sees it: who raised it, how to reach them, and
+ * which trip and coach it concerns. Read from `sos_incident_details`, which
+ * shows these only for incidents the caller may act on.
+ */
+export interface SOSResponderIncident extends SOSIncident {
+  passengerName: string;
+  passengerPhone: string | null;
+  tripNumber: string | null;
+  departureAt: string | null;
+  operatorName: string | null;
+  busNumber: string | null;
+  routeLabel: string | null;
+}
+
 export interface TriggerSOSInput {
   latitude: number;
   longitude: number;
@@ -101,6 +116,29 @@ function toIncident(row: SOSRow): SOSIncident {
   };
 }
 
+interface SOSDetailRow extends SOSRow {
+  passenger_name: string | null;
+  passenger_phone: string | null;
+  trip_number: string | null;
+  departure_at: string | null;
+  operator_name: string | null;
+  bus_number: string | null;
+  route_label: string | null;
+}
+
+function toResponderIncident(row: SOSDetailRow): SOSResponderIncident {
+  return {
+    ...toIncident(row),
+    passengerName: row.passenger_name ?? 'Passenger',
+    passengerPhone: row.passenger_phone,
+    tripNumber: row.trip_number,
+    departureAt: row.departure_at,
+    operatorName: row.operator_name,
+    busNumber: row.bus_number,
+    routeLabel: row.route_label,
+  };
+}
+
 const COLUMNS =
   'id, user_id, booking_id, trip_id, latitude, longitude, status, note, created_at, acknowledged_at, responding_at, resolved_at';
 
@@ -156,22 +194,26 @@ export const sosService = {
   },
 
   /**
-   * Alerts that still need attention, for whoever is allowed to see them.
+   * Alerts that still need attention, for whoever may respond to them — with
+   * the passenger's name and phone, the trip and the coach.
    *
-   * There is no operator filter in this query on purpose: RLS already returns
-   * only the incidents raised on the caller's own trips (plus their own).
-   * Filtering here as well would be a second, drifting copy of that rule — the
-   * mistake Phase 7 made twice with the operator views.
+   * No operator filter here on purpose: `sos_incident_details` already returns
+   * only the incidents `can_manage_sos` lets the caller act on. Filtering here
+   * as well would be a second, drifting copy of that rule — the mistake Phase 7
+   * made twice with the operator views. A passenger gets nothing from it; their
+   * own alerts come from `listMine`.
    */
-  async listOpen(): Promise<SOSIncident[]> {
+  async listOpen(): Promise<SOSResponderIncident[]> {
     const { data, error } = await supabase
-      .from('sos_incidents')
-      .select(COLUMNS)
+      .from('sos_incident_details')
+      .select(
+        `${COLUMNS}, passenger_name, passenger_phone, trip_number, departure_at, operator_name, bus_number, route_label`,
+      )
       .in('status', OPEN_SOS_STATUSES)
       .order('created_at', { ascending: false });
 
     if (error) throw toAppError(error);
-    return (data as SOSRow[]).map(toIncident);
+    return (data as SOSDetailRow[]).map(toResponderIncident);
   },
 
   async getById(id: UUID): Promise<SOSIncident> {

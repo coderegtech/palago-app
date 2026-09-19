@@ -389,6 +389,21 @@ responder is already on the way**; every transition is audited and notified.
 its permission and error states on web; the capture itself needs a development build, the same gap
 Phase 8 records.
 
+*Fixed after the fact (20260919000038):* the first cut alerted nobody. `trigger_sos` notified only
+the passenger, so the operator, the driver and the crew learnt of an alert only if the operator
+dashboard happened to be open; RLS hid the passenger's name and phone from the responders, who got
+bare coordinates; drivers and admins had no SOS screen at all, so an alert raised before boarding
+was seen by no one; the passenger was told "help is being arranged" before anyone had seen it; and
+the trip was the most recently *created* live booking rather than the one under way. Now every
+responder (the trip's operator admins, its rostered driver and crew, every admin) gets a
+notification — which fires the push webhook — and `sos_incident_details` gives them name, phone,
+trip, coach and route for the incidents `can_manage_sos` already lets them act on. The shared
+`SOSMonitor` is on the operator dashboard, the driver's roster and the admin overview, with Call and
+map buttons. The passenger's location request now times out after 12 s and falls back to the last
+known fix — it had no timeout, and indoors could hang the button on "Getting your location…"
+indefinitely. `pnpm db:verify:sos`: 57 checks; the 17 new ones red-ran with 9 failures against the
+old functions.
+
 ### Phase 12 — Notifications
 
 In-app feed and push delivery. The rows are already written by payment, boarding, loyalty and SOS —

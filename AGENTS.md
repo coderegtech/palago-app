@@ -260,6 +260,15 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
   now tampers a significant character, and the verifier rejects non-canonical spellings. If a
   security check fails intermittently, find the mechanism; don't warm something and re-run.
 
+- **An emergency alert must reach the people who can act on it, not only the person who raised it.**
+  `trigger_sos` once wrote a single notification — to the passenger — so an SOS existed for the
+  operator only while its dashboard was open, and drivers and admins had no screen for it at all.
+  `sos_responder_ids(trip)` is who must hear (operator admins, rostered crew, every admin) and each
+  gets a notification, which is what fires push. Responders read `sos_incident_details`, never
+  `sos_incidents` + `profiles`: RLS rightly hides passenger profiles from operators, so the view
+  exposes name and phone only for incidents `can_manage_sos` allows. Never tell the passenger help
+  is coming until a responder has said so.
+
 - **Account status and availability are two fields and must stay two fields.**
   `profiles.account_status` says whether somebody may sign in;
   `drivers.availability_status` / `assistants.availability_status` say whether they may be given a

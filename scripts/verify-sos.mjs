@@ -227,6 +227,135 @@ check(
 );
 
 // ---------------------------------------------------------------------------
+console.log('\nWho is told');
+// ---------------------------------------------------------------------------
+//
+// An alert only the passenger was notified of reached nobody who could help:
+// until 20260919000038 the operator, its driver and its crew got nothing, and
+// saw the alert only if the dashboard happened to be open.
+
+async function sosNotesFor(user) {
+  const { data } = await user.supabase
+    .from('notifications')
+    .select('title, message, data')
+    .eq('type', 'SOS')
+    // Their OWN notifications: an admin may read everyone's.
+    .eq('user_id', user.userId);
+  return (data ?? []).filter((n) => n.data?.sosId === incidentId);
+}
+
+const cherryNotes = await sosNotesFor(cherry);
+check(
+  'the operator running the trip is notified',
+  booking ? cherryNotes.length >= 1 : cherryNotes.length === 0,
+  String(cherryNotes.length),
+);
+check('once — the repeat press did not notify again', cherryNotes.length <= 1, String(cherryNotes.length));
+check(
+  'with the trip and the passenger in the message',
+  !booking || (/EMERGENCY/.test(cherryNotes[0]?.title ?? '') && /raised an SOS/.test(cherryNotes[0]?.message ?? '')),
+  JSON.stringify(cherryNotes[0]),
+);
+
+const adminNotes = await sosNotesFor(admin);
+check('the admins are notified', adminNotes.length === 1, String(adminNotes.length));
+
+// The crew rostered on the trip — resolved from the roster, never hardcoded
+// (AGENTS.md: which driver is on a seeded trip is the allocator's choice).
+let crewMember = null;
+if (booking) {
+  const { data: roster } = await admin.supabase
+    .from('trip_assignments')
+    .select('status, drivers(user_id)')
+    .eq('trip_id', booking.trip_id)
+    .neq('status', 'CANCELLED');
+  const driverUserId = roster?.find((r) => r.drivers?.user_id)?.drivers?.user_id;
+  if (driverUserId) {
+    const { data: driverProfile } = await admin.supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', driverUserId)
+      .single();
+    crewMember = await signIn(driverProfile.email);
+  }
+}
+check('the seed rosters a driver with an account on that trip', !booking || crewMember !== null);
+if (crewMember) {
+  const crewNotes = await sosNotesFor(crewMember);
+  check('the driver on that trip is notified', crewNotes.length === 1, String(crewNotes.length));
+}
+
+check('a rival operator is not notified', (await sosNotesFor(roro)).length === 0);
+check('another passenger is not notified', (await sosNotesFor(other)).length === 0);
+
+const { data: passengerNote } = await passenger.supabase
+  .from('notifications')
+  .select('message')
+  .eq('type', 'SOS')
+  .order('created_at', { ascending: false })
+  .limit(1)
+  .single();
+check(
+  'the passenger is not promised help nobody has offered yet',
+  !/arranged|on the way|coming/i.test(passengerNote?.message ?? ''),
+  passengerNote?.message,
+);
+
+// ---------------------------------------------------------------------------
+console.log('\nWhat a responder sees');
+// ---------------------------------------------------------------------------
+
+const DETAIL = 'id, passenger_name, passenger_phone, trip_number, bus_number, route_label';
+
+const cherryDetail = await cherry.supabase
+  .from('sos_incident_details')
+  .select(DETAIL)
+  .eq('id', incidentId);
+check(
+  'the operator gets the passenger’s name with the alert',
+  !booking || Boolean(cherryDetail.data?.[0]?.passenger_name),
+  cherryDetail.error?.message ?? JSON.stringify(cherryDetail.data),
+);
+check(
+  'and the trip and coach',
+  !booking ||
+    (Boolean(cherryDetail.data?.[0]?.trip_number) && Boolean(cherryDetail.data?.[0]?.bus_number)),
+  JSON.stringify(cherryDetail.data),
+);
+
+if (crewMember) {
+  const crewDetail = await crewMember.supabase
+    .from('sos_incident_details')
+    .select('id')
+    .eq('id', incidentId);
+  check('the driver on the trip sees it too', crewDetail.data?.length === 1, crewDetail.error?.message);
+}
+
+const adminDetail = await admin.supabase.from('sos_incident_details').select('id').eq('id', incidentId);
+check('the admin sees it', adminDetail.data?.length === 1, adminDetail.error?.message);
+
+const roroDetail = await roro.supabase.from('sos_incident_details').select(DETAIL);
+check(
+  'a rival operator sees no one’s details',
+  !(roroDetail.data ?? []).some((r) => r.id === incidentId),
+  JSON.stringify(roroDetail.data),
+);
+const otherDetail = await other.supabase.from('sos_incident_details').select(DETAIL);
+check(
+  'another passenger sees no one’s details',
+  (otherDetail.data?.length ?? 0) === 0,
+  JSON.stringify(otherDetail.data),
+);
+const selfDetail = await passenger.supabase.from('sos_incident_details').select(DETAIL);
+check(
+  'nor does the passenger — it is the responders’ view',
+  (selfDetail.data?.length ?? 0) === 0,
+  JSON.stringify(selfDetail.data),
+);
+const anonDetail = await anon.from('sos_incident_details').select('id');
+check('an anonymous caller is refused', (anonDetail.data?.length ?? 0) === 0);
+
+// ---------------------------------------------------------------------------
 console.log('\nDriving it forward');
 // ---------------------------------------------------------------------------
 

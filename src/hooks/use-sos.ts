@@ -67,8 +67,12 @@ export function useSOSSubscription(enabled = true) {
   useEffect(() => {
     if (!enabled) return;
 
+    // A name per subscriber. supabase-js hands back the SAME channel for a
+    // repeated name, so two screens subscribing at once (the SOS screen over
+    // home, the dashboard over another tab) shared one — and the first to
+    // unmount removed it, silently ending the other's live updates.
     const channel = supabase
-      .channel('sos-incidents')
+      .channel(`sos-incidents-${Math.random().toString(36).slice(2)}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'sos_incidents' },

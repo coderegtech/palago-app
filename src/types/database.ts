@@ -2103,6 +2103,80 @@ export type Database = {
           },
         ]
       }
+      sos_incident_details: {
+        Row: {
+          acknowledged_at: string | null
+          booking_id: string | null
+          bus_number: string | null
+          created_at: string | null
+          departure_at: string | null
+          id: string | null
+          latitude: number | null
+          longitude: number | null
+          note: string | null
+          operator_name: string | null
+          passenger_name: string | null
+          passenger_phone: string | null
+          resolved_at: string | null
+          responding_at: string | null
+          route_label: string | null
+          status: Database["public"]["Enums"]["sos_status"] | null
+          trip_id: string | null
+          trip_number: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sos_incidents_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sos_incidents_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "operator_manifest"
+            referencedColumns: ["booking_id"]
+          },
+          {
+            foreignKeyName: "sos_incidents_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "driver_assignments"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "sos_incidents_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "operator_trip_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sos_incidents_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trip_live_position"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "sos_incidents_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trip_search"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sos_incidents_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       trip_live_position: {
         Row: {
           accuracy_m: number | null
@@ -2552,6 +2626,7 @@ export type Database = {
         }
         Returns: Json
       }
+      sos_responder_ids: { Args: { p_trip_id: string }; Returns: string[] }
       staff_activity: {
         Args: { p_limit?: number; p_user_id: string }
         Returns: Json

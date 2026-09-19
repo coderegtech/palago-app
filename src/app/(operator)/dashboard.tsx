@@ -2,48 +2,31 @@ import { ObserveInteractiveMarker } from 'expo-observe';
 import {
   Bus as BusIcon,
   CalendarDays,
-  CheckCircle,
-  CircleAlert,
   Banknote,
-  Clock,
   IdCard,
-  MapPin,
   TicketCheck,
   TrendingUp,
   Users,
 } from 'lucide-react-native';
 import { useRouter, type Href } from 'expo-router';
-import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
+import { SOSMonitor } from '@/components/common/sos-monitor';
 import { Alert } from '@/components/ui/alert';
-import { Badge, type BadgeTone } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Divider } from '@/components/ui/divider';
 import { Header } from '@/components/ui/header';
-import { Input } from '@/components/ui/input';
-import { Modal } from '@/components/ui/modal';
 import { Screen } from '@/components/ui/screen';
 import { ErrorState, Skeleton } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
-import { SOSStatus } from '@/constants/enums';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { usePendingDiscountReviews } from '@/hooks/use-discount';
 import { useOperatorDashboard } from '@/hooks/use-operator';
-import {
-  useAcknowledgeSOS,
-  useActiveSOSIncidents,
-  useRespondSOS,
-  useResolveSOS,
-  useSOSSubscription,
-} from '@/hooks/use-sos';
-import { AppError } from '@/lib/errors';
-import type { SOSIncident } from '@/services/sos-service';
-import { useUIStore } from '@/stores/ui-store';
 import { cn } from '@/utils/cn';
-import { formatDate, formatDateShort, todayISO } from '@/utils/datetime';
+import { formatDateShort, todayISO } from '@/utils/datetime';
 import { formatMoney } from '@/utils/money';
 
 function greeting(): string {
@@ -102,27 +85,6 @@ function StatusPill({ label, count, tone }: { label: string; count: number; tone
   );
 }
 
-/** Status as a word plus a tone — never colour alone. */
-const sosStatusPresentation: Record<SOSStatus, { label: string; tone: BadgeTone }> = {
-  [SOSStatus.ACTIVE]: { label: 'New', tone: 'danger' },
-  [SOSStatus.ACKNOWLEDGED]: { label: 'Acknowledged', tone: 'warning' },
-  [SOSStatus.RESPONDING]: { label: 'Responding', tone: 'info' },
-  [SOSStatus.RESOLVED]: { label: 'Resolved', tone: 'success' },
-  [SOSStatus.CANCELLED]: { label: 'Cancelled', tone: 'neutral' },
-};
-
-/**
- * Open emergency alerts for this operator's trips.
- *
- * Scoped by RLS, not by a filter here: `sos_incidents` returns only the alerts
- * raised on trips this operator runs (plus the caller's own). A caller-side
- * filter would be a second copy of that rule, which is exactly how a rival's
- * data leaked twice in Phase 7.
- *
- * When nothing is open this says so plainly — which is honest now in a way an
- * "0 alerts" tile was not before Phase 11. The monitor is real, so a quiet one
- * means quiet.
- */
 /**
  * How many discount claims are waiting.
  *
@@ -164,179 +126,6 @@ function DiscountQueueTile() {
         />
       ) : null}
     </Card>
-  );
-}
-
-function SOSMonitoring() {
-  const incidents = useActiveSOSIncidents();
-  const acknowledge = useAcknowledgeSOS();
-  const respond = useRespondSOS();
-  const resolve = useResolveSOS();
-  const showToast = useUIStore((state) => state.showToast);
-
-  // Realtime as well as the hook's polling: an emergency console that missed an
-  // alert because a websocket dropped is worse than one that refetches often.
-  useSOSSubscription();
-
-  const [resolving, setResolving] = useState<SOSIncident | null>(null);
-  const [note, setNote] = useState('');
-
-  async function run(action: () => Promise<unknown>, success: string) {
-    try {
-      await action();
-      showToast({ tone: 'success', title: success });
-    } catch (error) {
-      showToast({
-        tone: 'danger',
-        title: 'That did not go through',
-        message: error instanceof AppError ? error.message : undefined,
-      });
-    }
-  }
-
-  async function onResolve() {
-    if (!resolving) return;
-    const incident = resolving;
-    setResolving(null);
-    await run(
-      () => resolve.mutateAsync({ sosId: incident.id, notes: note.trim() || null }),
-      'Alert resolved',
-    );
-    setNote('');
-  }
-
-  if (incidents.isLoading) return <Skeleton className="h-20" />;
-
-  if (incidents.isError) {
-    return (
-      <ErrorState
-        message="We could not load emergency alerts."
-        onRetry={() => void incidents.refetch()}
-      />
-    );
-  }
-
-  const open = incidents.data ?? [];
-
-  if (open.length === 0) {
-    return (
-      <Card className="flex-row items-center gap-3 border-success/40 bg-success-soft">
-        <CheckCircle size={20} color={Colors.success} />
-        <View className="flex-1">
-          <Text variant="bodyStrong">No open emergency alerts</Text>
-          <Text variant="caption" tone="muted">
-            Alerts raised on your trips appear here as they happen.
-          </Text>
-        </View>
-      </Card>
-    );
-  }
-
-  return (
-    <>
-      <Card className="gap-3 border-danger/40">
-        <View className="flex-row items-center justify-between gap-2">
-          <View className="flex-row items-center gap-2">
-            <CircleAlert size={20} color={Colors.danger} />
-            <Text variant="bodyStrong">Emergency alerts</Text>
-          </View>
-          <Badge label={`${open.length} open`} tone="danger" />
-        </View>
-
-        <Divider />
-
-        <View className="gap-3">
-          {open.map((incident) => (
-            <View key={incident.id} className="gap-2 rounded-xl bg-danger-soft/40 p-3">
-              <View className="flex-row items-start justify-between gap-3">
-                <View className="flex-1 gap-1">
-                  <View className="flex-row items-center gap-2">
-                    <MapPin size={14} color={Colors.text} />
-                    <Text variant="bodyStrong">
-                      {incident.latitude.toFixed(4)}, {incident.longitude.toFixed(4)}
-                    </Text>
-                  </View>
-                  <View className="flex-row items-center gap-2">
-                    <Clock size={12} color={Colors.textMuted} />
-                    <Text variant="caption" tone="muted">
-                      Raised {formatDate(incident.createdAt)}
-                    </Text>
-                  </View>
-                </View>
-                <Badge
-                  label={sosStatusPresentation[incident.status].label}
-                  tone={sosStatusPresentation[incident.status].tone}
-                />
-              </View>
-
-              <View className="flex-row flex-wrap gap-2">
-                {incident.status === SOSStatus.ACTIVE ? (
-                  <Button
-                    label="Acknowledge"
-                    size="sm"
-                    variant="secondary"
-                    loading={acknowledge.isPending}
-                    onPress={() =>
-                      void run(() => acknowledge.mutateAsync(incident.id), 'Alert acknowledged')
-                    }
-                    accessibilityLabel="Acknowledge this alert"
-                  />
-                ) : null}
-
-                {incident.status !== SOSStatus.RESPONDING ? (
-                  <Button
-                    label="Responding"
-                    size="sm"
-                    variant="secondary"
-                    loading={respond.isPending}
-                    onPress={() =>
-                      void run(() => respond.mutateAsync(incident.id), 'Marked as responding')
-                    }
-                    accessibilityLabel="Mark a responder as on the way"
-                  />
-                ) : null}
-
-                <Button
-                  label="Resolve"
-                  size="sm"
-                  onPress={() => {
-                    setNote('');
-                    setResolving(incident);
-                  }}
-                  accessibilityLabel="Resolve this alert"
-                />
-              </View>
-            </View>
-          ))}
-        </View>
-      </Card>
-
-      {/*
-        A note field rather than `Alert.prompt`, which exists only on iOS — on
-        Android and web it does nothing at all, so the operator would tap
-        Resolve and watch nothing happen.
-      */}
-      <Modal
-        visible={resolving !== null}
-        onClose={() => setResolving(null)}
-        title="Resolve alert"
-        dismissOnBackdropPress={false}>
-        <View className="gap-3">
-          <Text variant="caption" tone="muted">
-            What happened? The note is kept with the incident and shown to the passenger.
-          </Text>
-          <Input
-            value={note}
-            onChangeText={setNote}
-            placeholder="Optional note"
-            multiline
-            accessibilityLabel="Resolution note"
-          />
-          <Button label="Mark resolved" onPress={() => void onResolve()} loading={resolve.isPending} />
-          <Button label="Cancel" variant="ghost" onPress={() => setResolving(null)} />
-        </View>
-      </Modal>
-    </>
   );
 }
 
@@ -589,8 +378,7 @@ export default function OperatorDashboardScreen() {
               />
             </View>
 
-            {/* SOS Monitoring - Phase 11 */}
-            <SOSMonitoring />
+            <SOSMonitor />
 
             <DiscountQueueTile />
 
