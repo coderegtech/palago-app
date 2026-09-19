@@ -15,6 +15,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
 import { LOCATION_STALE_AFTER_MS } from '@/constants/config';
+import { shouldPublishFix } from '@/utils/location-throttle';
 import { TripStatus } from '@/constants/enums';
 import { supabase } from '@/lib/supabase';
 import { trackingService } from '@/services/tracking-service';
@@ -230,6 +231,7 @@ export function useLocationPublisher(tripId: UUID | null, active: boolean) {
   // Kept in a ref so the effect does not re-run — and re-request permission —
   // every time a fix arrives.
   const failuresRef = useRef(0);
+  const lastAttemptRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!tripId || !active) return;
@@ -241,6 +243,7 @@ export function useLocationPublisher(tripId: UUID | null, active: boolean) {
     (async () => {
       setState({ kind: 'requesting' });
       failuresRef.current = 0;
+      lastAttemptRef.current = null;
 
       let Location: typeof import('expo-location');
       try {
@@ -278,6 +281,11 @@ export function useLocationPublisher(tripId: UUID | null, active: boolean) {
           distanceInterval: LOCATION_DISTANCE_INTERVAL_M,
         },
         (fix) => {
+          // The platform's timeInterval is Android-only; see shouldPublishFix.
+          const now = Date.now();
+          if (!shouldPublishFix(lastAttemptRef.current, now, LOCATION_UPDATE_INTERVAL_MS)) return;
+          lastAttemptRef.current = now;
+
           void (async () => {
             try {
               await trackingService.publishLocation({

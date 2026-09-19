@@ -124,6 +124,43 @@ builds for the environment variables it needs.
   runs.
 - **Nothing has been observed on hardware.** No metric has been seen arriving in the dashboard,
   because that needs a release build on a device. The wiring is verified; the delivery is not.
-- **`ObserveErrorBoundary` and `Observe.reportError` are available and unused.** Wiring the boundary
-  around the route tree, and calling `reportError` from the places that already swallow an error
-  into a toast, would turn handled failures into something visible. Phase 13/15 work.
+- **`ObserveErrorBoundary` is available and unused** — `AppErrorBoundary` already covers render
+  errors. `Observe.reportError` is now wired; see *Structured logging* below.
+
+## Structured logging
+
+Two halves, joined by one id.
+
+**Edge Functions** (`supabase/functions/_shared/log.ts`). Every function starts with
+`serve('<name>', handler)` from `_shared/http.ts` instead of `Deno.serve`. That gives each request an
+id (a well-formed incoming `x-request-id` is kept, anything else replaced), returns it in the
+`x-request-id` response header, and writes exactly one `request` line per call:
+
+```json
+{"ts":"…","level":"warn","fn":"manage-staff","requestId":"91dc…","event":"request","method":"POST","status":403,"code":"FORBIDDEN","durationMs":7}
+```
+
+Refusals are `warn`, 5xx are `error`, and an unhandled throw is logged with a trimmed stack and
+answered with the standard INTERNAL_ERROR envelope instead of the runtime's bare 500. Anything else
+worth recording is `log.info|warn|error('snake_case_event', { fields })` — there is no `console.*`
+left in any function. The request context travels by `AsyncLocalStorage`, so `failFromRpc`, three
+calls deep, logs against the right request; a module-level "current request" would mix up
+concurrent requests in one isolate (tested).
+
+Redaction is central, not per call site: any key naming a credential (`token`, `password`, `secret`,
+`authorization`, `apikey`, `signature`, `cookie`) becomes `[redacted]`, an e-mail keeps only its
+domain, a payment reference keeps only its last three digits, and long strings are cut at 500
+characters. In the Supabase dashboard: **Edge Functions → Logs**, filter on the JSON, e.g. a
+`requestId` from a user's report.
+
+**The app** (`src/lib/report.ts`). TanStack Query's `QueryCache` and `MutationCache` `onError` send
+every failure through `reportFailure`, which **drops the refusals the server meant** (FORBIDDEN,
+SEAT_UNAVAILABLE, VALIDATION_ERROR…) and reports the rest to Observe: an `app_failure` event with
+`where` (`query:sos`, `mutation:unknown`), `code`, and the function's `requestId` when there was one
+— carried on `AppError.requestId` by `invokeFunction`. `Observe.reportError` adds the stack, except
+for NETWORK_ERROR, which is counted but is not a bug. No booking id, reference, e-mail or message
+text goes into the attributes. Release builds only, like every Observe event.
+
+**Not done:** mutations have no `mutationKey`s, so a mutation failure is reported as
+`mutation:unknown` until they are given names; and nothing aggregates the function logs beyond the
+Supabase dashboard's own retention.

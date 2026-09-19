@@ -30,7 +30,8 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-import { fail, failFromRpc, handleOptions, ok } from '../_shared/http.ts';
+import { fail, failFromRpc, handleOptions, ok, serve } from '../_shared/http.ts';
+import { log } from '../_shared/log.ts';
 
 const PROOF_BUCKET = 'discount-proofs';
 /** Storage `remove` takes a batch; keep each call comfortably small. */
@@ -47,7 +48,7 @@ interface ResetResult {
   resetAt: string;
 }
 
-Deno.serve(async (request) => {
+serve('reset-data', async (request) => {
   if (request.method === 'OPTIONS') return handleOptions();
   if (request.method !== 'POST') return fail('VALIDATION_ERROR', 'Use POST.', 405);
 
@@ -111,11 +112,13 @@ Deno.serve(async (request) => {
       if (filesFailed.length > 0) {
         // The database reset has committed and cannot be undone from here.
         // Say so plainly rather than reporting a clean success.
-        console.error(
-          `[reset-data] DATABASE RESET COMMITTED, but ${filesFailed.length} ID photograph(s) ` +
-            `could not be removed from ${PROOF_BUCKET} and must be deleted by hand:`,
-          filesFailed,
-        );
+        log.error('proof_files_not_removed_after_reset', {
+          committed: true,
+          bucket: PROOF_BUCKET,
+          count: filesFailed.length,
+          paths: filesFailed,
+          action: 'delete these files by hand',
+        });
       }
     }
 

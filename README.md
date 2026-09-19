@@ -16,7 +16,7 @@ public test-payment page, built on Expo and Supabase.
 
 ## Status
 
-**All fifteen phases are built; Phase 15 is partly done and says so.** The full passenger journey
+**All fifteen phases are built.** The full passenger journey
 works end to end — trip search, a visual seat map, atomic seat reservation proven under concurrent
 contention, a payment QR, a public test-payment page, server-side confirmation with receipts,
 Realtime status, a signed boarding pass issued only after payment and usable once, a mock wallet
@@ -28,7 +28,7 @@ constraints rather than by a form.
 A security review (Phase 13) found and closed four write paths; Phase 14 added a coverage ratchet
 and an honest map of which level tests what. What is **not** done is stated in each document rather
 than implied: push delivery to a handset is unproven, MapLibre has never run on hardware, and the
-performance and structured-logging halves of Phase 15 are outstanding. A feature-by-feature
+Phase 15 GPS throttle and tree shaking are verified on web and in the database but not on a device. A feature-by-feature
 reference is in [docs/features.md](docs/features.md).
 
 | Phase | Scope | State |
@@ -47,7 +47,7 @@ reference is in [docs/features.md](docs/features.md).
 | 12 | Notifications | **Done** — push to a handset still unproven |
 | 13 | Security review | **Done** |
 | 14 | Testing | **Done** |
-| 15 | Production preparation | **Partly** — monitoring, environments and deployment in; performance and logging not |
+| 15 | Production preparation | **Done** — handset verification of the GPS throttle outstanding |
 
 ## Tech stack
 

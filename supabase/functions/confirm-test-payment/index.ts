@@ -23,7 +23,8 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-import { callerIp, fail, failFromRpc, handleOptions, ok } from '../_shared/http.ts';
+import { callerIp, fail, failFromRpc, handleOptions, ok, serve } from '../_shared/http.ts';
+import { log } from '../_shared/log.ts';
 import { resolveProvider } from '../_shared/payment-provider.ts';
 
 interface RequestBody {
@@ -31,7 +32,7 @@ interface RequestBody {
   token?: string;
 }
 
-Deno.serve(async (request) => {
+serve('confirm-test-payment', async (request) => {
   if (request.method === 'OPTIONS') return handleOptions();
   if (request.method !== 'POST') return fail('VALIDATION_ERROR', 'Use POST.', 405);
 
@@ -55,12 +56,12 @@ Deno.serve(async (request) => {
   try {
     provider = resolveProvider(Deno.env.get('PAYMENT_PROVIDER'), webBaseUrl);
   } catch (error) {
-    console.error(error);
+    log.error('payment_provider_unavailable', { error });
     return fail('INTERNAL_ERROR');
   }
 
   if (!provider.acceptsClientConfirmation) {
-    console.error(`Provider ${provider.name} does not accept client confirmation.`);
+    log.error('provider_rejects_client_confirmation', { provider: provider.name });
     return fail('FORBIDDEN', 'This payment must be confirmed by the payment provider.');
   }
 

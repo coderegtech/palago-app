@@ -15,7 +15,7 @@ the Edge Functions all live in the Supabase project, and Vercel talks to them fr
 |---|---|
 | `vercel.json` | Build command, output directory, the SPA rewrite, cache and security headers |
 | `.vercelignore` | Keeps `supabase/`, `docs/` and local state out of the upload — none of it reaches Metro |
-| `package.json` → `build:web` | `expo export --platform web`, which writes `dist/` |
+| `package.json` → `build:web` | `scripts/build-web.mjs`: a tree-shaken `expo export --platform web`, which writes `dist/` (see [performance.md](performance.md)) |
 | `package.json` → `packageManager`, `engines.node` | Pin pnpm to 10.30.3 (the version that generated the lockfile) and require Node 20+. The Node range is deliberately not a single major — pinning `22.x` makes pnpm warn on every local command on a machine running anything newer |
 
 `dist/` is git-ignored. Vercel builds it; it is never committed.

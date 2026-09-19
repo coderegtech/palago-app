@@ -29,6 +29,7 @@ export async function invokeFunction<T>(name: string, body: Record<string, unkno
   if (!accessToken) throw new AppError(ErrorCode.UNAUTHORIZED);
 
   let envelope: FunctionEnvelope<T>;
+  let requestId: string | undefined;
   try {
     const response = await fetch(`${env.supabaseUrl}/functions/v1/${name}`, {
       method: 'POST',
@@ -39,6 +40,9 @@ export async function invokeFunction<T>(name: string, body: Record<string, unkno
       },
       body: JSON.stringify(body),
     });
+    // Every function returns one (`_shared/log.ts`); carried on the error so a
+    // report can be joined to the function's own log line.
+    requestId = response.headers.get('x-request-id') ?? undefined;
     envelope = (await response.json()) as FunctionEnvelope<T>;
   } catch {
     throw new AppError(ErrorCode.NETWORK_ERROR);
@@ -46,7 +50,7 @@ export async function invokeFunction<T>(name: string, body: Record<string, unkno
 
   if (!envelope.success) {
     const code = (envelope.code ?? ErrorCode.INTERNAL_ERROR) as ErrorCode;
-    throw new AppError(code, envelope.message);
+    throw new AppError(code, envelope.message, undefined, requestId);
   }
 
   return envelope.data as T;

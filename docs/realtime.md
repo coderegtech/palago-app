@@ -28,8 +28,9 @@ Notifications arrive in Phase 12; seat-availability subscriptions are not built.
 
 ## Driver location
 
-`expo-location` publishes to `bus_locations` every 10 seconds (`LOCATION_UPDATE_INTERVAL_MS`) and
-at least 25 metres apart (`LOCATION_DISTANCE_INTERVAL_M`) — a bus queueing at a terminal should not
+`expo-location` publishes to `bus_locations` at most every 20 seconds (`LOCATION_UPDATE_INTERVAL_MS`,
+enforced by the publisher itself — iOS ignores the platform's `timeInterval`; see
+[performance.md](performance.md)) and at least 25 metres apart (`LOCATION_DISTANCE_INTERVAL_M`) — a bus queueing at a terminal should not
 spend battery re-sending the same coordinate. A driver may write only for a trip assigned to them,
 on an ACTIVE assignment, while the trip is BOARDING, DEPARTED or ON_TRIP — enforced by RLS, not by
 the app, and proved by `pnpm db:verify:tracking`.
@@ -54,8 +55,9 @@ declaration and would mean tracking a driver between trips.
 States that must be handled, and are, each with its own wording: permission denied, location
 services off, no GPS fix yet, patchy connection (some pings lost), repeated publish failures, and a
 stale last-known position shown with its age rather than as a silently frozen marker.
-`LOCATION_STALE_AFTER_MS` is six intervals — long enough to ride out a tunnel, short enough not to
-mislead.
+`LOCATION_STALE_AFTER_MS` is two minutes — long enough to ride out a tunnel, short enough not to
+mislead. Trails of trips that ended more than 30 days ago are thinned to their final fix nightly
+(`prune_bus_locations`, pg_cron).
 
 ## No estimated arrival
 

@@ -3,6 +3,7 @@ import { Bus, Building2, MapPin, Route, TicketCheck, TrendingUp, Users } from 'l
 import { ScrollView, View } from 'react-native';
 
 import { SignOutButton } from '@/components/common/sign-out-button';
+import { SOSMonitor } from '@/components/common/sos-monitor';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { DataTable } from '@/components/ui/data-table';
@@ -81,6 +82,10 @@ export default function AdminOverviewScreen() {
         <Header title="Platform overview" subtitle={`All operators · ${formatDateShort(today)}`} />
         {/* An admin lands here on a cold start; TTI is when the figures resolve. */}
         {!dashboard.isPending && <ObserveInteractiveMarker />}
+
+        {/* Every open alert on the platform — and the only place an alert raised
+            before boarding, with no operator to route it to, is seen at all. */}
+        <SOSMonitor emptyHint="Alerts from every operator, and from passengers not on a trip, appear here." />
 
         {dashboard.isPending ? (
           <View className="gap-3">

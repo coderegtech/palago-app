@@ -75,7 +75,7 @@ Then, before declaring the phase done:
 | 12 | Notifications | **Done** — in-app feed and realtime verified; push delivery to a handset unproven (needs a device) |
 | 13 | Security review | **Done** — four write paths found and closed, see [security-review.md](security-review.md) |
 | 14 | Testing | **Done** — 180 unit tests, 802 database checks, a coverage ratchet, and a scenario map in [testing.md](testing.md) |
-| 15 | Production preparation | **Partly done** — error monitoring, environment separation and deployment are in; performance and structured logging are not. See below |
+| 15 | Production preparation | **Done** — monitoring, environments, deployment, performance and structured logging; the GPS and tree-shaking changes are unproven on a handset. See below |
 
 ## Invariants
 
@@ -389,6 +389,21 @@ responder is already on the way**; every transition is audited and notified.
 its permission and error states on web; the capture itself needs a development build, the same gap
 Phase 8 records.
 
+*Fixed after the fact (20260919000038):* the first cut alerted nobody. `trigger_sos` notified only
+the passenger, so the operator, the driver and the crew learnt of an alert only if the operator
+dashboard happened to be open; RLS hid the passenger's name and phone from the responders, who got
+bare coordinates; drivers and admins had no SOS screen at all, so an alert raised before boarding
+was seen by no one; the passenger was told "help is being arranged" before anyone had seen it; and
+the trip was the most recently *created* live booking rather than the one under way. Now every
+responder (the trip's operator admins, its rostered driver and crew, every admin) gets a
+notification — which fires the push webhook — and `sos_incident_details` gives them name, phone,
+trip, coach and route for the incidents `can_manage_sos` already lets them act on. The shared
+`SOSMonitor` is on the operator dashboard, the driver's roster and the admin overview, with Call and
+map buttons. The passenger's location request now times out after 12 s and falls back to the last
+known fix — it had no timeout, and indoors could hang the button on "Getting your location…"
+indefinitely. `pnpm db:verify:sos`: 57 checks; the 17 new ones red-ran with 9 failures against the
+old functions.
+
 ### Phase 12 — Notifications
 
 In-app feed and push delivery. The rows are already written by payment, boarding, loyalty and SOS —
@@ -408,18 +423,18 @@ and holds, unauthorised operator/location/SOS access.
 Broaden coverage to the full scenario list in [testing.md](testing.md), with particular attention to
 concurrency and idempotency — the guarantees a passing happy-path test says nothing about.
 
-### Phase 15 — Production preparation
+### Phase 15 — Production preparation ✅
 
-Performance, error monitoring, logging, environment separation, deployment. Three of the five are
-done; the other two are named here rather than quietly dropped.
+Performance, error monitoring, logging, environment separation, deployment. All five are in; what
+still needs a handset is named in each row.
 
 | Item | State |
 |---|---|
 | **Error monitoring** | **Done.** EAS Observe records startup, navigation and crash metrics; `AppErrorBoundary` catches render-phase errors with their component stack and shows a real screen instead of a white one. See [observability.md](observability.md). |
 | **Environment separation** | **Done.** `eas.json` links each build profile to an EAS environment; `scripts/check-build-env.mjs` fails a build whose variables are missing or point at localhost; `scripts/_verify-env.mjs` keeps the verify suites off any hosted project. |
 | **Deployment** | **Done.** `pnpm deploy:check` refuses to ship a client the target database cannot serve — see the Android and web halves of [deployment.md](deployment.md). |
-| **Performance** | **Not done.** The 5.6 MB web entry bundle is unsplit; `bus_locations` is append-only with no retention job (~1.3 GB/month at province-wide scale); and realtime fan-out from a 10-second GPS interval is the second-largest projected running cost. All three are sized in [production-costs.md](production-costs.md) §8. |
-| **Structured logging** | **Not done.** The Edge Functions `console.log`; nothing is correlated by request or aggregated. `Observe.logEvent` and `Observe.reportError` are installed and unused. |
+| **Performance** | **Done — web and database verified; the GPS change needs a handset.** Web JavaScript per page 5.9 MB → 2.7 MB (tree shaking + async routes, web only). GPS publishing throttled in the app because iOS ignores `timeInterval`, and 10 s → 20 s. `bus_locations` trails of trips ended over 30 days ago are thinned nightly by pg_cron. Measurements and caveats: [performance.md](performance.md). |
+| **Structured logging** | **Done.** Every Edge Function writes JSON lines with a request id (also returned as `x-request-id`), one `request` line per call with status, refusal code and duration, and central redaction of credentials, e-mails and payment references. The app reports unexpected failures — not intended refusals — to Observe with that request id. See [observability.md](observability.md#structured-logging). |
 
 ## Deviations log
 
@@ -447,7 +462,7 @@ Scope moves between phases are recorded here rather than left implicit.
 | SOS schema rewritten before it ever applied | 11 | The first cut referenced `trip_assignments.assigned_to` and an `audit_log_trigger()` that does not exist, so `db:reset` and `db:push` both failed outright. Rewritten to the conventions the other ten phases use — a real enum, bounded coordinates, `search_path = ''`, grants, no client write path — rather than patched to merely apply |
 | `cancel_sos` and `respond_sos` | 11 (added) | `SOSStatus` already carried RESPONDING and CANCELLED, and nothing set either. A status an enum promises and no code path reaches is a lie in the type |
 | Trip search status filter | 12 → 14 | The plan for `20260915000032` said `searchTrips` would filter on the new `operator_status` / `bus_status` / `route_status` / `is_active` columns. The migration shipped them and the client never used them, so a passenger could pick a departure on a withdrawn coach and only be refused at payment. Found while writing the tests that now guard it |
-| Performance and structured logging | 15 → deferred | Named in [production-costs.md](production-costs.md) §8 with the numbers behind them. Neither is a correctness risk; both are cost and operability |
+| Performance and structured logging | 15 → deferred, then done | Named in [production-costs.md](production-costs.md) §8 with the numbers behind them; delivered afterwards — see [performance.md](performance.md) and [observability.md](observability.md#structured-logging) |
 | Rate limiting | 13 → deferred | Assessed rather than built. The brute-force vectors are already closed by Supabase Auth's sign-in limit and a 256-bit payment token; what remains is resource abuse, which a Postgres counter does not solve and a CDN does. Recorded in [security-review.md](security-review.md) §3.1 |
 | Admin console | Unplanned, built on request | Not in the fifteen-phase plan. An ADMIN previously landed on the passenger home with no surface of their own, and reference data could only be added by editing `seed.sql`. Scope was held to analytics plus operators, terminals, routes and buses; trip scheduling stays with the operator console |
 

@@ -13,12 +13,18 @@ import { ERROR_MESSAGES, ErrorCode } from '@/constants/errors';
 export class AppError extends Error {
   readonly code: ErrorCode;
   readonly cause?: unknown;
+  /**
+   * The Edge Function's `x-request-id`, when the error came from one — the key
+   * to that request's lines in the function logs.
+   */
+  readonly requestId?: string;
 
-  constructor(code: ErrorCode, message?: string, cause?: unknown) {
+  constructor(code: ErrorCode, message?: string, cause?: unknown, requestId?: string) {
     super(message ?? ERROR_MESSAGES[code]);
     this.name = 'AppError';
     this.code = code;
     this.cause = cause;
+    this.requestId = requestId;
   }
 }
 

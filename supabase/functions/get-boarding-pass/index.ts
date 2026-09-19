@@ -12,13 +12,14 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-import { fail, handleOptions, ok } from '../_shared/http.ts';
+import { fail, handleOptions, ok, serve } from '../_shared/http.ts';
+import { log } from '../_shared/log.ts';
 import { requireSigningSecret, signBoardingToken } from '../_shared/qr-token.ts';
 
 /** How long a pass stays valid. Comfortably longer than any Palawan trip. */
 const TTL_SECONDS = 48 * 60 * 60;
 
-Deno.serve(async (request) => {
+serve('get-boarding-pass', async (request) => {
   if (request.method === 'OPTIONS') return handleOptions();
   if (request.method !== 'POST') return fail('VALIDATION_ERROR', 'Use POST.', 405);
 
@@ -39,7 +40,7 @@ Deno.serve(async (request) => {
   try {
     secret = requireSigningSecret();
   } catch (error) {
-    console.error(error);
+    log.error('signing_secret_missing', { error });
     return fail('INTERNAL_ERROR');
   }
 
@@ -57,7 +58,7 @@ Deno.serve(async (request) => {
     .maybeSingle();
 
   if (error) {
-    console.error('Could not read booking:', error.message);
+    log.error('booking_read_failed', { message: error.message });
     return fail('INTERNAL_ERROR');
   }
   if (!booking) return fail('NOT_FOUND');

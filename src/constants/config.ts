@@ -22,8 +22,17 @@ export const QR_BOOKING_TYPE = 'PALAGO_BOOKING' as const;
 
 export const MAX_PASSENGERS_PER_BOOKING = 10;
 
-/** Driver GPS ping interval, in milliseconds. */
-export const LOCATION_UPDATE_INTERVAL_MS = 10_000;
+/**
+ * Driver GPS ping interval, in milliseconds — enforced by the publisher itself
+ * (`shouldPublishFix`), because iOS ignores the platform's own `timeInterval`.
+ *
+ * Twenty seconds, not ten: every ping is a `bus_locations` row and a Realtime
+ * message to every passenger watching the trip, and at ten seconds the fan-out
+ * was the second-largest projected running cost (docs/production-costs.md §8).
+ * A bus moves ~450 m in 20 s at highway speed — invisible on a map zoomed to a
+ * province.
+ */
+export const LOCATION_UPDATE_INTERVAL_MS = 20_000;
 
 /**
  * Minimum metres moved before a fix is published, on top of the interval.
@@ -34,11 +43,13 @@ export const LOCATION_DISTANCE_INTERVAL_M = 25;
 
 /**
  * A position older than this is shown as last-known with its age, not as the
- * bus's current spot. Six intervals: long enough to ride out a tunnel or a
- * dropped packet, short enough that a passenger is not misled about where the
- * bus is. A frozen marker with no explanation is worse than no marker.
+ * bus's current spot. Long enough to ride out a tunnel or a couple of dropped
+ * pings, short enough that a passenger is not misled about where the bus is. A
+ * frozen marker with no explanation is worse than no marker. Two minutes —
+ * fixed rather than a multiple of the interval, so tuning the interval does not
+ * quietly change what a passenger is told.
  */
-export const LOCATION_STALE_AFTER_MS = LOCATION_UPDATE_INTERVAL_MS * 6;
+export const LOCATION_STALE_AFTER_MS = 120_000;
 
 /**
  * A departure within this many minutes of schedule counts as on time.
