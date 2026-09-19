@@ -132,9 +132,16 @@ the rewards catalogue (fixed-amount and capped-percentage discounts — no "perk
 rewards, because a perk nothing enforces would be a feature that exists only as a
 table row).
 
-- **Earned only for travelling.** Points are awarded inside `end_trip`, when a
-  booking becomes `COMPLETED`, computed from what was actually paid
-  (1 point per ₱10, rounded down). Exactly-once, enforced by a unique index.
+- **Earned on payment: one point per ₱100.** `floor(paid / ₱100)`, whole points
+  only (₱250 → 2, ₱999 → 9), from what was actually PAID after discounts and
+  rewards. Credited by a trigger on `payments` the moment any payment path —
+  mock provider, wallet, counter — marks one PAID, so a future provider earns
+  points without being taught to. Exactly-once, enforced by a unique index; a
+  re-confirmed payment or `end_trip` afterwards credits nothing more.
+- **Refunds take the points back** (`REVERSED`, also exactly-once). Points
+  already spent on a reward stay spent — the balance never goes negative — and
+  the refunded booking's credit leaves `lifetime_points` too. Walk-ins have no
+  account and earn nothing.
 - **Redeeming** (`redeem_reward`) applies a server-computed discount to an unpaid
   booking and stakes the points. Cancelling the redemption, cancelling the
   booking, or refunding it all return the staked points; lifetime points do not
@@ -356,7 +363,7 @@ the path behind it is verified through manual entry. See [qr-flow.md](qr-flow.md
 | `top_up_wallet` | Bounded, idempotent test credit |
 | `pay_booking_with_wallet` | Pay a booking from balance to the same end state as QR |
 | `wallet_post` | Move balance + write ledger together (private — not granted) |
-| `award_loyalty_for_booking` | Points for a completed trip, exactly once |
+| `award_loyalty_for_booking` / `reverse_loyalty_for_booking` | Points on payment, taken back on refund — each exactly once, run by the `payments_sync_loyalty` trigger |
 | `redeem_reward` / `release_booking_redemption` / `cancel_reward_redemption` | Apply / undo a reward on an unpaid booking |
 | `loyalty_post` | Move points balance + write ledger together (private) |
 | `set_trip_boarding` / `start_trip` / `end_trip` | Trip lifecycle; idempotent by precondition |
@@ -408,8 +415,9 @@ and asserts, among much else:
 - eight concurrent wallet top-ups → no centavo lost; balance always equals the
   ledger sum
 - a wallet payment reaches the identical end state as a QR payment
-- points are awarded once per completed trip; a redeem/undo loop never inflates
-  lifetime points
+- points are credited once per paid booking — six simultaneous confirmations
+  credit once — and reversed once on refund; neither a redeem/undo loop nor a
+  pay/refund loop inflates lifetime points
 - one operator cannot read a rival's manifest, revenue or fleet, or touch its crew
 - a driver cannot rewrite the GPS trail they published
 - `start_trip` / `end_trip` retries do not move a recorded timestamp

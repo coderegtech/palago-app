@@ -296,6 +296,13 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
   from midnight to 08:00 in Palawan. Use `formatTimestamp` / `formatTimestampDate` for anything that
   ends in `At`.
 
+- **Loyalty points are credited by a trigger on `payments`, not by the payment functions.**
+  `payments_sync_loyalty` runs `award_loyalty_for_booking` when any row becomes PAID and
+  `reverse_loyalty_for_booking` when one goes PAID → REFUNDED — one point per ₱100 actually paid,
+  each exactly once by a partial unique index. A new payment path therefore earns points without
+  being taught to; do not add an award call to it, and do not credit points anywhere else. A refund
+  must reverse, or pay → refund becomes a loop that prints points.
+
 - **Account status and availability are two fields and must stay two fields.**
   `profiles.account_status` says whether somebody may sign in;
   `drivers.availability_status` / `assistants.availability_status` say whether they may be given a

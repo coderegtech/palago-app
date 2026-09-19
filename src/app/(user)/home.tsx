@@ -56,16 +56,14 @@ interface QuickActionProps {
   icon: React.ReactNode;
   label: string;
   onPress: () => void;
-  /** Names the phase that will build the destination, when it is not built yet. */
-  phase?: string;
   tone?: 'default' | 'danger';
 }
 
-function QuickAction({ icon, label, onPress, phase, tone = 'default' }: QuickActionProps) {
+function QuickAction({ icon, label, onPress, tone = 'default' }: QuickActionProps) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={phase ? `${label}, not implemented, ${phase}` : label}
+      accessibilityLabel={label}
       onPress={onPress}
       className="min-w-[30%] flex-1 items-center gap-2 rounded-card border border-border bg-surface p-3 active:bg-primary-soft">
       <View
@@ -78,11 +76,6 @@ function QuickAction({ icon, label, onPress, phase, tone = 'default' }: QuickAct
       <Text variant="caption" className="text-center font-semibold">
         {label}
       </Text>
-      {phase ? (
-        <Text variant="caption" tone="muted" className="text-center text-[10px]">
-          {phase}
-        </Text>
-      ) : null}
     </Pressable>
   );
 }
@@ -226,7 +219,7 @@ export default function HomeScreen() {
             </Text>
             <Text variant="subtitle">{loyalty.data?.pointsBalance ?? 0}</Text>
             <Text variant="caption" tone="muted" className="text-[10px]">
-              Earned on completed trips
+              1 point per ₱100 paid
             </Text>
           </Card>
         </View>
@@ -359,7 +352,6 @@ export default function HomeScreen() {
             <QuickAction
               icon={<CircleAlert size={18} color={Colors.danger} />}
               label="Emergency"
-              phase="Phase 11"
               tone="danger"
               onPress={() => router.push('/sos')}
             />

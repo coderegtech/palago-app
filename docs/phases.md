@@ -345,8 +345,12 @@ reward cheaper.
   the Phase 9 wallet. Signed amounts, so `sum(points) = points_balance` is one checkable invariant.
 - `lifetime_points` only ever rises and only counts `EARNED` / `BONUS` — spending a point does not
   undo the fact that you earned it, and returning a staked point does not re-earn it.
-- Awarding at payment would be easier and wrong: a passenger who pays and never boards would collect
-  points for an empty seat, and a refund would then have to claw them back.
+- ~~Awarding at payment would be easier and wrong~~ — **changed on request (20260919000041).** Points
+  are now credited on payment at one per ₱100, by a trigger on `payments` so every payment path earns
+  them. The two objections above were answered rather than ignored: a refund reverses the credit
+  exactly once (`REVERSED`, balance never below zero, lifetime reduced by the full credit), and a
+  paid-but-never-boarded seat does earn — that is the rule asked for, and it is recorded in the
+  deviations log. `pnpm db:verify:loyalty`: 62 checks; 18 red-ran against the old rules.
 
 *Unverified:* nothing in this phase has run on hardware; verified in the browser and against the
 database.
@@ -442,6 +446,7 @@ Scope moves between phases are recorded here rather than left implicit.
 
 | Moved | From → To | Reason |
 |---|---|---|
+| Loyalty earned on payment, not on travel | 10 → changed | Requested: one point per ₱100 paid, credited on payment. Phase 10 had credited on trip completion at one per ₱10. A no-show now keeps the points for a seat they paid for; a refund reverses them |
 | `profiles` table, role enum, RLS | 3 → 2 | Authentication needs somewhere to put a person |
 | Operator account screen | 7 → 2 | Phase 2 owns sign-out; an operator who cannot sign out is a broken build |
 | `trip_seats` | 4 → 3 | A trip without seat inventory is not usable by search |

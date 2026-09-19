@@ -5,9 +5,11 @@
  *
  * What this exists to prove, none of which a unit test can show:
  *
- *   - points are earned for a trip TAKEN, not for one booked or merely paid for
- *   - earning is exactly-once: ending the same trip twice awards once, and so
- *     does ending it from two places at the same moment
+ *   - points are floor(paid / ₱100), whole points only, credited the moment a
+ *     booking's payment succeeds — by any payment path — and not before
+ *   - earning is exactly-once: a re-confirmed payment, six simultaneous
+ *     confirmations, and end_trip afterwards all credit nothing more
+ *   - a refund takes the points back, exactly once
  *   - nobody can write a points balance or a ledger row directly
  *   - a redemption reduces the booking total server-side; the client names a
  *     reward, never an amount
@@ -84,76 +86,65 @@ async function bookAndBoard(session, tripId, count = 1) {
 }
 
 /**
- * Book, pay, board and complete a whole trip, returning the points earned.
+ * Pay for bookings until the balance can afford the dearest reward under test.
  *
- * The suite needs a real balance before it can test redeeming, and the ONLY way
- * to get points is to travel — which is the point of the design. A ₱450 trip
- * earns 45, and the cheapest reward is 50, so more than one trip is required.
- * That is worth noticing rather than working around: a scheme where the first
- * trip already buys a reward would be a different scheme.
+ * Points arrive on payment now (20260919000041), so a balance is built by
+ * paying, not by travelling. At one point per ₱100 a single seat earns a
+ * handful, so each booking takes a full party — ten seats on a ₱450+ trip is
+ * 45+ points — and a few bookings cover the 250-point reward.
  */
-async function completeTripCycle(session, tripId) {
-  const booking = await bookAndBoard(session, tripId, 1);
-  await payByQr(session, booking.bookingId);
-
-  // Open boarding, board at this trip, then depart. This suite used to depart
-  // first and board afterwards, which only worked because boarding never
-  // checked that the bus was still at the door.
-  await cherry.supabase.rpc('set_trip_boarding', { p_trip_id: tripId });
-  const pass = await invoke('get-boarding-pass', { bookingId: booking.bookingId }, session.accessToken);
-  await invoke(
-    'confirm-boarding',
-    {
-      payload: JSON.stringify({
-        type: 'PALAGO_BOOKING',
-        bookingId: pass.body.data.bookingId,
-        reference: pass.body.data.reference,
-        token: pass.body.data.token,
-      }),
-      tripId,
-    },
-    cherry.accessToken,
-  );
-  await cherry.supabase.rpc('start_trip', { p_trip_id: tripId });
-
-  const ended = await cherry.supabase.rpc('end_trip', { p_trip_id: tripId });
-  return { booking, pointsAwarded: ended.data?.pointsAwarded ?? 0 };
-}
-
-/** Travel until the balance can afford the dearest reward we want to test. */
 async function earnAtLeast(session, target) {
-  // A trip already open for boarding is still one you can travel on — and
-  // earlier suites leave their door open, because that is what boarding does.
-  // Read from the operator, not from one driver's roster. Cherry Bus has more
-  // departures than a single driver can cover, so `driver_assignments` for
-  // `driver@palago.test` is a slice of the schedule — and this helper needs to
-  // keep travelling until the balance is high enough.
-  const { data: trips } = await cherry.supabase
-    .from('operator_trip_overview')
+  const { data: trips } = await session.supabase
+    .from('trip_search')
     .select('id')
-    .in('status', ['SCHEDULED', 'BOARDING']);
+    .eq('status', 'SCHEDULED')
+    .order('fare', { ascending: false });
 
   for (const t of trips ?? []) {
     if ((await points(session)).points_balance >= target) break;
-    await completeTripCycle(session, t.id);
+    try {
+      const booking = await bookAndBoard(session, t.id, 10);
+      await payByQr(session, booking.bookingId);
+    } catch {
+      // A trip without ten free seats is skipped, not a failure.
+    }
   }
   return (await points(session)).points_balance;
 }
 
+/** Pay by the mock provider. Returns what a repeat confirmation needs. */
 async function payByQr(session, bookingId) {
   const created = await invoke('create-test-payment', { bookingId }, session.accessToken);
   const token = new URL(created.body.data.paymentUrl).searchParams.get('t');
-  await invoke('confirm-test-payment', { reference: created.body.data.reference, token });
+  const reference = created.body.data.reference;
+  await invoke('confirm-test-payment', { reference, token });
+  return { reference, token };
+}
+
+async function earnedRows(session, bookingId) {
+  return (
+    (await session.supabase
+      .from('loyalty_transactions')
+      .select('points, description')
+      .eq('booking_id', bookingId)
+      .eq('type', 'EARNED')).data ?? []
+  );
 }
 
 // ---------------------------------------------------------------------------
-console.log('\nEvery user starts with an empty account');
+console.log('\nEvery account balances');
 // ---------------------------------------------------------------------------
 
+// Not "starts at zero" any more: the seed's paid bookings are credited the
+// moment they are paid, so the seeded passenger arrives with points. What must
+// hold for every account, always, is that the balance is its ledger.
 const start = await points(passenger);
 check('a passenger has a loyalty account', start !== null, JSON.stringify(start));
-check('with no points', start?.points_balance === 0, String(start?.points_balance));
-check('and no lifetime points', start?.lifetime_points === 0, String(start?.lifetime_points));
+check(
+  'whose balance equals its ledger',
+  start?.points_balance === (await ledgerSum(passenger)),
+  `balance ${start?.points_balance}, ledger ${await ledgerSum(passenger)}`,
+);
 
 // ---------------------------------------------------------------------------
 console.log('\nNobody writes points directly');
@@ -194,11 +185,34 @@ const anonPoints = (await client().from('loyalty_accounts').select('id')).data ?
 check('an anonymous caller sees no accounts', anonPoints.length === 0, `saw ${anonPoints.length}`);
 
 // ---------------------------------------------------------------------------
-console.log('\nPaying is not travelling');
+console.log('\nThe rate: floor(paid / ₱100), whole points only');
 // ---------------------------------------------------------------------------
 
-// This scenario asserts what a DRIVER can do, so it must be a trip that driver
-// is actually rostered on — which is now a subset of the operator's schedule.
+// The examples from the specification, plus the edges either side of a point.
+for (const [centavos, expected] of [
+  [10_000, 1], // ₱100
+  [25_000, 2], // ₱250
+  [56_000, 5], // ₱560
+  [99_900, 9], // ₱999
+  [9_999, 0], // ₱99.99 — no partial point
+  [0, 0],
+]) {
+  const { data, error } = await passenger.supabase.rpc('loyalty_points_for', {
+    p_amount_centavos: centavos,
+  });
+  check(
+    `₱${(centavos / 100).toFixed(2)} earns ${expected}`,
+    !error && data === expected,
+    error?.message ?? String(data),
+  );
+}
+
+// ---------------------------------------------------------------------------
+console.log('\nPaying earns the points');
+// ---------------------------------------------------------------------------
+
+// This scenario also asserts what a DRIVER can do, so it must be a trip that
+// driver is actually rostered on — a subset of the operator's schedule.
 const trip = (
   await driver.supabase
     .from('driver_assignments')
@@ -211,23 +225,99 @@ if (!trip) {
   check('a SCHEDULED Cherry trip exists (seed data)', false, 'none found');
 } else {
   const tripId = trip.trip_id;
+  const before = await points(passenger);
 
-  const booking = await bookAndBoard(passenger, tripId, 1);
-  await payByQr(passenger, booking.bookingId);
-
-  const afterPaying = await points(passenger);
+  // Three passengers, so "the fare" is a real multi-seat total, not one seat.
+  const booking = await bookAndBoard(passenger, tripId, 3);
+  const unpaid = await points(passenger);
   check(
-    'paying for a booking earns NOTHING',
-    afterPaying.points_balance === 0,
-    String(afterPaying.points_balance),
+    'booking without paying earns nothing',
+    unpaid.points_balance === before.points_balance,
+    `${before.points_balance} -> ${unpaid.points_balance}`,
+  );
+
+  const payment = await payByQr(passenger, booking.bookingId);
+  const expected = Math.floor(booking.totalAmount / 10_000);
+  const afterPaying = await points(passenger);
+
+  check(
+    `paying ₱${(booking.totalAmount / 100).toFixed(2)} credits ${expected} points at once`,
+    afterPaying.points_balance - before.points_balance === expected,
+    `+${afterPaying.points_balance - before.points_balance}, expected +${expected}`,
+  );
+  check(
+    'and lifetime points rise by the same',
+    afterPaying.lifetime_points - before.lifetime_points === expected,
+    `+${afterPaying.lifetime_points - before.lifetime_points}`,
+  );
+
+  const rows = await earnedRows(passenger, booking.bookingId);
+  check(
+    'one EARNED ledger row records it against the booking',
+    rows.length === 1 && rows[0].points === expected,
+    JSON.stringify(rows),
+  );
+  check(
+    'the balance equals the ledger sum',
+    afterPaying.points_balance === (await ledgerSum(passenger)),
+    `balance ${afterPaying.points_balance}, ledger ${await ledgerSum(passenger)}`,
+  );
+
+  const { data: note } = await passenger.supabase
+    .from('notifications')
+    .select('title, data')
+    .eq('type', 'REWARD')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+  check(
+    'the passenger is told',
+    note?.data?.bookingId === booking.bookingId && note?.data?.points === expected,
+    JSON.stringify(note),
   );
 
   // -------------------------------------------------------------------------
-  console.log('\nCompleting the trip earns points');
+  console.log('\nEarning is exactly-once');
   // -------------------------------------------------------------------------
 
-  await driver.supabase.rpc('set_trip_boarding', { p_trip_id: tripId });
+  const again = await invoke('confirm-test-payment', payment);
+  check(
+    'confirming the same payment again answers "already confirmed"',
+    again.body?.data?.alreadyConfirmed === true,
+    JSON.stringify(again.body),
+  );
+  check(
+    'and credits nothing more',
+    (await points(passenger)).points_balance === afterPaying.points_balance,
+    String((await points(passenger)).points_balance),
+  );
 
+  // Six simultaneous confirmations of one fresh payment — a retried webhook
+  // and a double-tap arriving together. Exactly one credit may land.
+  const raceBooking = await bookAndBoard(passenger, tripId, 2);
+  const created = await invoke('create-test-payment', { bookingId: raceBooking.bookingId }, passenger.accessToken);
+  const raceToken = new URL(created.body.data.paymentUrl).searchParams.get('t');
+  const beforeRace = (await points(passenger)).points_balance;
+  await Promise.all(
+    Array.from({ length: 6 }, () =>
+      invoke('confirm-test-payment', { reference: created.body.data.reference, token: raceToken }),
+    ),
+  );
+  const raceExpected = Math.floor(raceBooking.totalAmount / 10_000);
+  check(
+    'six simultaneous confirmations credit exactly once',
+    (await points(passenger)).points_balance - beforeRace === raceExpected,
+    `+${(await points(passenger)).points_balance - beforeRace}, expected +${raceExpected}`,
+  );
+  check(
+    'with exactly one EARNED row',
+    (await earnedRows(passenger, raceBooking.bookingId)).length === 1,
+    String((await earnedRows(passenger, raceBooking.bookingId)).length),
+  );
+
+  // Travelling afterwards must not pay out a second time: end_trip still
+  // calls the award, and must now find it already done.
+  await driver.supabase.rpc('set_trip_boarding', { p_trip_id: tripId });
   const boardingPass = await invoke(
     'get-boarding-pass',
     { bookingId: booking.bookingId },
@@ -246,82 +336,79 @@ if (!trip) {
     },
     driver.accessToken,
   );
-
-  const beforeEnd = await points(passenger);
-  check(
-    'boarding alone still earns nothing',
-    beforeEnd.points_balance === 0,
-    String(beforeEnd.points_balance),
-  );
-
   await driver.supabase.rpc('start_trip', { p_trip_id: tripId });
+  const beforeEnd = (await points(passenger)).points_balance;
   const ended = await driver.supabase.rpc('end_trip', { p_trip_id: tripId });
   check('the driver can end the trip', !ended.error, ended.error?.message);
-
-  const expected = Math.floor(booking.totalAmount / 1000);
-  const afterEnd = await points(passenger);
   check(
-    `the passenger earned ${expected} points (1 per ₱10 of ₱${(booking.totalAmount / 100).toFixed(2)})`,
-    afterEnd.points_balance === expected,
-    `${afterEnd.points_balance}, expected ${expected}`,
-  );
-  check(
-    'and lifetime points match',
-    afterEnd.lifetime_points === expected,
-    String(afterEnd.lifetime_points),
-  );
-  check(
-    'end_trip reports what it awarded',
-    ended.data?.pointsAwarded === expected,
-    JSON.stringify(ended.data?.pointsAwarded),
-  );
-  check(
-    'the balance equals the ledger sum',
-    afterEnd.points_balance === (await ledgerSum(passenger)),
-    `balance ${afterEnd.points_balance}, ledger ${await ledgerSum(passenger)}`,
+    'completing the trip awards nothing more — it was credited on payment',
+    ended.data?.pointsAwarded === 0 && (await points(passenger)).points_balance === beforeEnd,
+    `awarded ${JSON.stringify(ended.data?.pointsAwarded)}, balance ${beforeEnd} -> ${(await points(passenger)).points_balance}`,
   );
 
-  // -------------------------------------------------------------------------
-  console.log('\nEarning is exactly-once');
-  // -------------------------------------------------------------------------
-
-  const endedAgain = await driver.supabase.rpc('end_trip', { p_trip_id: tripId });
-  check(
-    'ending the trip again awards nothing',
-    endedAgain.data?.pointsAwarded === 0,
-    JSON.stringify(endedAgain.data),
-  );
-  const afterSecondEnd = await points(passenger);
-  check(
-    'and the balance is unchanged',
-    afterSecondEnd.points_balance === expected,
-    `${expected} -> ${afterSecondEnd.points_balance}`,
-  );
-
-  // Six simultaneous callers, the way two crew phones would race.
   const races = await Promise.all(
     Array.from({ length: 6 }, () => driver.supabase.rpc('end_trip', { p_trip_id: tripId })),
   );
-  const raceAwarded = races.reduce((total, r) => total + (r.data?.pointsAwarded ?? 0), 0);
-  const afterRace = await points(passenger);
   check(
-    'six simultaneous end_trip calls award nothing extra',
-    raceAwarded === 0,
-    `awarded ${raceAwarded}`,
+    'nor do six simultaneous end_trip calls',
+    races.every((r) => (r.data?.pointsAwarded ?? 0) === 0) &&
+      (await points(passenger)).points_balance === beforeEnd,
+    races.map((r) => r.data?.pointsAwarded).join(','),
   );
   check(
-    'and the balance is still exactly one award',
-    afterRace.points_balance === expected,
-    `${afterRace.points_balance}, expected ${expected}`,
+    'the paid booking still has exactly one EARNED row',
+    (await earnedRows(passenger, booking.bookingId)).length === 1,
+    String((await earnedRows(passenger, booking.bookingId)).length),
   );
+}
 
-  const earnRows =
-    (await passenger.supabase
-      .from('loyalty_transactions')
-      .select('id')
-      .eq('booking_id', booking.bookingId)
-      .eq('type', 'EARNED')).data ?? [];
-  check('exactly one EARNED row exists for the booking', earnRows.length === 1, `${earnRows.length}`);
+// ---------------------------------------------------------------------------
+console.log('\nEvery way of paying earns the same');
+// ---------------------------------------------------------------------------
+
+// The credit is a trigger on `payments`, so the wallet path earns without
+// having been touched. Asserted, because "every path" is the whole claim.
+{
+  const walletTrip = (
+    await other.supabase.from('trip_search').select('id').eq('status', 'SCHEDULED').limit(1)
+  ).data?.[0];
+  const walletBooking = await bookAndBoard(other, walletTrip.id, 1);
+  await other.supabase.rpc('top_up_wallet', {
+    p_amount: walletBooking.totalAmount,
+    p_idempotency_key: `loyalty-${walletBooking.bookingId}`,
+  });
+  const beforeWallet = (await points(other)).points_balance;
+  const paid = await other.supabase.rpc('pay_booking_with_wallet', {
+    p_booking_id: walletBooking.bookingId,
+  });
+  check('a booking can be paid from the wallet', !paid.error, paid.error?.message);
+  check(
+    'and earns floor(paid / ₱100) too',
+    (await points(other)).points_balance - beforeWallet ===
+      Math.floor(walletBooking.totalAmount / 10_000),
+    `+${(await points(other)).points_balance - beforeWallet}`,
+  );
+}
+
+// A walk-in sold at the counter has no account, so nothing to credit — and
+// the cash sale must not fail for want of one.
+{
+  const counterTrip = (
+    await cherry.supabase.from('operator_trip_overview').select('id').eq('status', 'SCHEDULED').limit(1)
+  ).data?.[0];
+  const walkIn = await cherry.supabase.rpc('create_booking', {
+    p_trip_id: counterTrip.id,
+    p_passengers: [{ name: 'Walk-in Loyalty', type: 'ADULT' }],
+    p_seat_ids: null,
+    p_walk_in: true,
+    p_source: 'OPERATOR',
+    p_ticket_type: 'PRINTED',
+  });
+  const cash = await cherry.supabase.rpc('record_counter_payment', {
+    p_booking_id: walkIn.data?.bookingId,
+    p_method: 'CASH',
+  });
+  check('a walk-in cash sale still succeeds', !cash.error, cash.error?.message ?? walkIn.error?.message);
 }
 
 // ---------------------------------------------------------------------------
@@ -343,9 +430,9 @@ console.log('\nRedeeming a reward');
 // Travel enough to afford the dearest reward under test (250 points).
 const earnedTotal = await earnAtLeast(passenger, 260);
 check(
-  'travelling several trips builds a usable balance',
+  'paying for bookings builds a usable balance',
   earnedTotal >= 260,
-  `${earnedTotal} points after completing trips`,
+  `${earnedTotal} points after paying for bookings`,
 );
 
 const bookableTrip = (
@@ -438,13 +525,20 @@ if (!bookableTrip) {
     `${lifetimeBeforeLoop} -> ${lifetimeAfterLoop}`,
   );
 
-  const earnedSum = (
-    await passenger.supabase.from('loyalty_transactions').select('points, type')
-  ).data
+  // Credits, less what a refunded booking earned: a refund means it was never
+  // really earned (20260919000041), so it leaves lifetime as well as balance.
+  const ledger = (
+    await passenger.supabase.from('loyalty_transactions').select('points, type, booking_id')
+  ).data;
+  const refundedBookings = new Set(
+    ledger.filter((r) => r.type === 'REVERSED').map((r) => r.booking_id),
+  );
+  const earnedSum = ledger
     .filter((r) => r.type === 'EARNED' || r.type === 'BONUS')
+    .filter((r) => !(r.type === 'EARNED' && refundedBookings.has(r.booking_id)))
     .reduce((total, r) => total + r.points, 0);
   check(
-    'lifetime equals the sum of EARNED and BONUS credits',
+    'lifetime equals EARNED and BONUS credits, less refunded bookings',
     lifetimeAfterLoop === earnedSum,
     `lifetime ${lifetimeAfterLoop}, earned ${earnedSum}`,
   );
@@ -625,6 +719,37 @@ if (!bookableTrip) {
       (await points(passenger)).points_balance === balanceBeforeStake,
       String((await points(passenger)).points_balance),
     );
+
+    // Paying credited points; the refund must take exactly those back, or
+    // pay-earn-refund would be a loop that prints points.
+    const earned = await earnedRows(passenger, refundBooking.bookingId);
+    const reversed =
+      (await passenger.supabase
+        .from('loyalty_transactions')
+        .select('points')
+        .eq('booking_id', refundBooking.bookingId)
+        .eq('type', 'REVERSED')).data ?? [];
+    check(
+      'the points the payment earned are reversed by the refund',
+      earned.length === 1 && reversed.length === 1 && reversed[0].points === -earned[0].points,
+      `earned ${JSON.stringify(earned)}, reversed ${JSON.stringify(reversed)}`,
+    );
+
+    const refundAgain = await passenger.supabase.rpc('refund_test_payment', {
+      p_booking_id: refundBooking.bookingId,
+    });
+    void refundAgain;
+    const reversedAfterRetry =
+      (await passenger.supabase
+        .from('loyalty_transactions')
+        .select('id')
+        .eq('booking_id', refundBooking.bookingId)
+        .eq('type', 'REVERSED')).data ?? [];
+    check(
+      'and refunding again reverses nothing more',
+      reversedAfterRetry.length === 1,
+      String(reversedAfterRetry.length),
+    );
   } else {
     check('points are available to stake for the refund test', false, `balance ${balanceBeforeStake}`);
   }
@@ -673,6 +798,23 @@ check(
   finalPoints.points_balance === (await ledgerSum(passenger)),
   `balance ${finalPoints.points_balance}, ledger ${await ledgerSum(passenger)}`,
 );
+
+// After the refunds above: a pay-then-refund loop must not inflate lifetime.
+{
+  const rows = (
+    await passenger.supabase.from('loyalty_transactions').select('points, type, booking_id')
+  ).data;
+  const refunded = new Set(rows.filter((r) => r.type === 'REVERSED').map((r) => r.booking_id));
+  const genuinelyEarned = rows
+    .filter((r) => r.type === 'EARNED' || r.type === 'BONUS')
+    .filter((r) => !(r.type === 'EARNED' && refunded.has(r.booking_id)))
+    .reduce((total, r) => total + r.points, 0);
+  check(
+    'and lifetime points exclude what refunded bookings earned',
+    refunded.size > 0 && finalPoints.lifetime_points === genuinelyEarned,
+    `lifetime ${finalPoints.lifetime_points}, genuinely earned ${genuinelyEarned}, refunded bookings ${refunded.size}`,
+  );
+}
 
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) {

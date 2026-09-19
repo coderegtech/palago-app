@@ -146,6 +146,8 @@ export const LoyaltyTransactionType = {
   EXPIRED: 'EXPIRED',
   ADJUSTED: 'ADJUSTED',
   BONUS: 'BONUS',
+  /** Taken back because the booking that earned them was refunded. */
+  REVERSED: 'REVERSED',
 } as const;
 export type LoyaltyTransactionType =
   (typeof LoyaltyTransactionType)[keyof typeof LoyaltyTransactionType];

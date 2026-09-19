@@ -2513,6 +2513,7 @@ export type Database = {
         }
         Returns: Json
       }
+      prune_bus_locations: { Args: { p_batch_size?: number }; Returns: number }
       public_setting: { Args: { p_key: string }; Returns: string }
       record_counter_payment: {
         Args: {
@@ -2544,6 +2545,10 @@ export type Database = {
         Returns: Json
       }
       respond_sos: { Args: { p_sos_id: string }; Returns: Json }
+      reverse_loyalty_for_booking: {
+        Args: { p_booking_id: string }
+        Returns: number
+      }
       review_discount_eligibility: {
         Args: {
           p_approve: boolean
@@ -2788,6 +2793,7 @@ export type Database = {
         | "EXPIRED"
         | "ADJUSTED"
         | "BONUS"
+        | "REVERSED"
       notification_type:
         | "BOOKING_CONFIRMED"
         | "PAYMENT_CONFIRMED"
@@ -3004,6 +3010,7 @@ export const Constants = {
         "EXPIRED",
         "ADJUSTED",
         "BONUS",
+        "REVERSED",
       ],
       notification_type: [
         "BOOKING_CONFIRMED",

@@ -81,11 +81,12 @@ function RewardCard({ reward, balance }: { reward: RewardOption; balance: number
 }
 
 const ENTRY_META: Record<string, { label: string; icon: React.ReactNode }> = {
-  EARNED: { label: 'Trip completed', icon: <Plus size={16} color={Colors.success} /> },
+  EARNED: { label: 'Booking paid', icon: <Plus size={16} color={Colors.success} /> },
   BONUS: { label: 'Bonus', icon: <Sparkles size={16} color={Colors.success} /> },
   REDEEMED: { label: 'Reward used', icon: <Minus size={16} color={Colors.danger} /> },
   EXPIRED: { label: 'Points expired', icon: <Minus size={16} color={Colors.danger} /> },
   ADJUSTED: { label: 'Points returned', icon: <Plus size={16} color={Colors.info} /> },
+  REVERSED: { label: 'Booking refunded', icon: <Minus size={16} color={Colors.danger} /> },
 };
 
 function EntryRow({ entry }: { entry: LoyaltyEntry }) {
@@ -181,9 +182,10 @@ export default function RewardsScreen() {
             visible reads as arbitrary, and the rule here is genuinely simple.
           */}
           <Text variant="caption" tone="muted">
-            You earn 1 point for every {formatMoney(LOYALTY_CENTAVOS_PER_POINT)} you spend, and only
-            once you have actually travelled — points arrive when the trip is completed, not when
-            you book or pay.
+            You earn 1 point for every {formatMoney(LOYALTY_CENTAVOS_PER_POINT)} you pay for a
+            booking, in whole points — a {formatMoney(LOYALTY_CENTAVOS_PER_POINT * 2.5)} booking earns
+            2. They arrive as soon as the payment goes through, and are taken back if the booking is
+            refunded.
           </Text>
         </Card>
 
@@ -214,7 +216,7 @@ export default function RewardsScreen() {
           <Alert
             tone="info"
             title="No points yet"
-            message="Book a trip and travel on it — points are added when the driver ends the trip."
+            message="Book a trip and pay for it — points are added as soon as the payment goes through."
           />
         ) : null}
 
