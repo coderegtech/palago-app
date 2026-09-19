@@ -127,6 +127,16 @@ export async function capture(page, { DEVICE, DESKTOP, sleep }) {
     await page.shot('13-sos');
   });
 
+  // Sent for real, so the operator, driver and admin shots further down show
+  // the responder panel with an alert in it — name, Call button, trip and
+  // coach — rather than only its empty state. The seed has no open alert.
+  await step('sos-sent', async () => {
+    await page.allowLocation({ latitude: 10.3194, longitude: 119.346 }); // near Roxas
+    await page.click('Send SOS');
+    await page.waitFor('Alert sent', 20_000);
+    await page.shot('16-sos-sent');
+  });
+
   await step('discount', async () => {
     await page.go('/discount');
     await sleep(2500);
@@ -149,6 +159,12 @@ export async function capture(page, { DEVICE, DESKTOP, sleep }) {
     await page.signIn('operator@palago.test');
     await page.waitFor('Passengers booked', 20_000);
     await page.shot('20-operator-dashboard');
+  });
+
+  await step('operator-sos', async () => {
+    await page.scrollTo('Emergency alerts');
+    await page.waitFor('Call passenger');
+    await page.shot('20b-operator-sos-alert');
   });
 
   await step('schedule', async () => {

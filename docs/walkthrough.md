@@ -153,8 +153,11 @@ not just for being well-formed.
 <img src="screenshots/11-rewards.png" width="320" alt="Loyalty points balance and reward catalogue" />
 
 The balance and its ledger are written together or not at all. Points are
-awarded when a trip is **completed**, not when it is paid for — paying is not
-travelling.
+**one per ₱100 actually paid**, in whole points — a ₱250 booking earns 2 —
+credited the moment the payment goes through, whichever way it was paid. Each
+booking earns once however many times its payment is confirmed, and a refund
+takes the points back. The seeded passenger's 7 points are the ₱700 booking
+above.
 
 ### Tracking, emergencies, discounts, notifications
 
@@ -164,6 +167,17 @@ travelling.
 Tracking follows the bus while the trip is running. Position comes from the
 assigned driver's phone and only theirs, so the marker cannot jump between two
 devices.
+
+<img src="screenshots/16-sos-sent.png" width="320" alt="An emergency alert sent, listed under Your alerts with its location" />
+
+**Send SOS** reads the phone's location — giving up after 12 seconds and falling
+back to the last known fix rather than spinning forever indoors — and alerts
+everyone who can act on it: the operator running the trip, the driver and crew
+rostered on it, and every admin, each by notification and push. The passenger
+is told the alert was sent and nothing more; the app does not say help is
+coming until a responder has said so. Pressing again while it is open does not
+raise a second alert. This run sent one for real, so the operator, driver and
+admin screens below show it.
 
 <a id="discounts"></a>
 
@@ -193,6 +207,15 @@ operator **inside the view**, never by a filter the caller has to remember.
 Today's figures, aggregated server-side. The on-time percentage is `null` until
 something has actually departed rather than a confident 100%, and an uncrewed
 departure is called out as a warning.
+
+<img src="screenshots/20b-operator-sos-alert.png" width="900" alt="An open emergency alert on the operator dashboard: passenger name, trip, coach, route, location, and Call passenger, Open map, Acknowledge, Responding and Resolve" />
+
+Further down, the passenger's alert from above: who raised it, the trip, coach
+and route it concerns, where they were, and one tap to **call them** or **open
+the spot on a map**. The name and phone number come from a view that shows them
+only for alerts this operator may respond to — a rival operator sees nothing,
+and neither does any other passenger. Acknowledge, Responding and Resolve move
+it along, and each step appears on the passenger's own screen.
 
 ### Schedule
 
@@ -305,6 +328,11 @@ passenger reaching for the same seat produce one ticket.
 
 <img src="screenshots/30-admin-overview.png" width="900" alt="Platform overview with cross-operator totals" />
 
+Every open emergency alert on the platform sits at the top — including any raised
+by a passenger who is not on a trip, which has no operator to route it to and
+which only admins can see. (This run's alert was on a Cherry Bus trip, so here it
+appears as the operator's does above.)
+
 Platform-wide totals, and the same figures broken out per operator. The admin's
 revenue figure for a company is asserted equal to what that company sees on its
 own dashboard, so the two consoles cannot drift apart about money.
@@ -380,7 +408,10 @@ nobody waits forever — keep it.
 <img src="screenshots/40-driver-duty.png" width="320" alt="Driver's trips ordered by status: departed first, then scheduled, then arrived" />
 
 Deliberately separate from the operator console: crew must not see revenue and
-fleet. They see their own assignments and nothing else.
+fleet. They see their own assignments and nothing else — and, above them, any
+emergency alert raised on their trips. The crew are the nearest help there is,
+so the passenger's alert from the first journey is at the top of this screen,
+with the same Call and map buttons the operator has.
 
 The list is ordered by **what needs doing**, not by the calendar: the trip being
 driven first, then boarding, then scheduled (soonest first), then arrived — which
@@ -393,8 +424,9 @@ The trip lifecycle — open boarding, start, end — and position sharing, which
 off until the trip starts. Each step is idempotent: a retry after a dropped
 connection does not move a timestamp that was already recorded.
 
-Ending a trip is what completes the boarded passengers' bookings and awards
-their loyalty points.
+Ending a trip is what completes the boarded passengers' bookings. Their loyalty
+points were already credited when they paid; ending the trip checks and finds
+nothing left to award.
 
 <img src="screenshots/42-driver-scan.png" width="320" alt="Door scanner in the crew app" />
 
@@ -427,7 +459,9 @@ nobody can reach is worse than no screenshot.
 The shot list is [`scripts/walkthrough-steps.mjs`](../scripts/walkthrough-steps.mjs),
 written to read like this document. A broken step prints `!!` with its reason
 and the rest carry on, so one bad selector costs one picture rather than
-thirty-eight.
+forty. The run sends one real SOS (Chrome is given a fixed location near Roxas),
+so run it after `pnpm db:reset`, not before something else that expects no open
+alerts.
 
 ```bash
 WALKTHROUGH_ONLY=operator pnpm docs:screens

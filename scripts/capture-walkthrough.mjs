@@ -118,6 +118,30 @@ class Page {
     await this.send('Emulation.setDeviceMetricsOverride', { ...metrics, screenWidth: metrics.width, screenHeight: metrics.height });
   }
 
+  /**
+   * Lets the page read a fixed position without a permission prompt — the
+   * SOS button asks for location before it sends anything. Granted at browser
+   * level (no session id), because permissions belong to the origin.
+   */
+  async allowLocation({ latitude, longitude }) {
+    await rpc(this.ws, 'Browser.grantPermissions', { origin: APP, permissions: ['geolocation'] });
+    await this.send('Emulation.setGeolocationOverride', { latitude, longitude, accuracy: 20 });
+  }
+
+  /** Scrolls the first element containing some text to the top of the view. */
+  async scrollTo(text) {
+    const ok = await this.evaluate(`(() => {
+      const needle = ${JSON.stringify(text.toLowerCase())};
+      const el = [...document.querySelectorAll('div, span')].reverse()
+        .find((e) => e.children.length === 0 && (e.textContent ?? '').toLowerCase().includes(needle));
+      if (!el) return false;
+      el.scrollIntoView({ block: 'start' });
+      return true;
+    })()`);
+    if (!ok) throw new Error(`Nothing to scroll to matching "${text}"`);
+    await sleep(800);
+  }
+
   async go(route) {
     await this.send('Page.navigate', { url: `${APP}${route}` });
     await sleep(2500);
