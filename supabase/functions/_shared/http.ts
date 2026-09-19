@@ -10,6 +10,8 @@
  * The codes match src/constants/errors.ts exactly.
  */
 
+import { log, withLogging } from './log.ts';
+
 export const ERROR_CODES = [
   'UNAUTHORIZED',
   'FORBIDDEN',
@@ -69,6 +71,8 @@ export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  // So a browser caller can read the id to quote in a bug report.
+  'Access-Control-Expose-Headers': 'x-request-id',
 };
 
 const jsonHeaders = { ...corsHeaders, 'Content-Type': 'application/json' };
@@ -92,7 +96,9 @@ export function fail(code: ErrorCode, message?: string, status?: number): Respon
 
   return new Response(
     JSON.stringify({ success: false, code, message: message ?? FALLBACK_MESSAGES[code] }),
-    { status: httpStatus, headers: jsonHeaders },
+    // The code in a header too, so the request log line can record which
+    // refusal it was without reading the body back.
+    { status: httpStatus, headers: { ...jsonHeaders, 'x-palago-code': code } },
   );
 }
 
@@ -114,7 +120,7 @@ export function failFromRpc(error: { message?: string } | null): Response {
   const message = error?.message ?? '';
   if (isErrorCode(message)) return fail(message);
 
-  console.error('Unmapped RPC error:', message);
+  log.error('unmapped_rpc_error', { message });
   return fail('INTERNAL_ERROR');
 }
 
@@ -125,4 +131,14 @@ export function callerIp(request: Request): string | null {
     request.headers.get('cf-connecting-ip') ??
     null
   );
+}
+
+/**
+ * `Deno.serve` with structured request logging: a request id on every log line
+ * and in the `x-request-id` response header, one `request` line per call with
+ * status, refusal code and duration, and an unhandled throw answered with the
+ * INTERNAL_ERROR envelope. Every function starts with this. See ./log.ts.
+ */
+export function serve(fn: string, handler: (request: Request) => Promise<Response> | Response) {
+  Deno.serve(withLogging(fn, handler, () => fail('INTERNAL_ERROR')));
 }

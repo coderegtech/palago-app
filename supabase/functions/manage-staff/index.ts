@@ -23,7 +23,8 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-import { fail, failFromRpc, handleOptions, ok } from '../_shared/http.ts';
+import { fail, failFromRpc, handleOptions, ok, serve } from '../_shared/http.ts';
+import { log } from '../_shared/log.ts';
 
 type StaffRole = 'OPERATOR_ADMIN' | 'DRIVER' | 'CREW';
 
@@ -80,7 +81,7 @@ function isEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-Deno.serve(async (request) => {
+serve('manage-staff', async (request) => {
   if (request.method === 'OPTIONS') return handleOptions();
   if (request.method !== 'POST') return fail('VALIDATION_ERROR', 'Use POST.', 405);
 
@@ -142,7 +143,7 @@ Deno.serve(async (request) => {
       if (/already (been )?registered|already exists|duplicate/i.test(message)) {
         return fail('EMAIL_TAKEN');
       }
-      console.error('createUser failed:', message);
+      log.error('create_user_failed', { message });
       return fail('INTERNAL_ERROR');
     }
 
@@ -173,10 +174,14 @@ Deno.serve(async (request) => {
       // reported to the caller as success.
       const { error: cleanupError } = await asService.auth.admin.deleteUser(userId);
       if (cleanupError) {
-        console.error(
-          `Provisioning failed AND cleanup failed. Orphaned auth user ${userId} (${email}) ` +
-            `now exists with role USER: ${cleanupError.message}`,
-        );
+        // Loud on purpose: an auth user now exists with role USER and no
+        // provisioning, and only a person can decide what to do with it.
+        log.error('orphaned_auth_user', {
+          userId,
+          email,
+          message: cleanupError.message,
+          action: 'delete this auth user by hand or finish provisioning it',
+        });
       }
       return failFromRpc(provisionError);
     }
@@ -209,7 +214,7 @@ Deno.serve(async (request) => {
       password,
     });
     if (updateError) {
-      console.error('Password reset failed:', updateError.message);
+      log.error('password_reset_failed', { message: updateError.message });
       return fail('INTERNAL_ERROR');
     }
 
@@ -252,7 +257,7 @@ Deno.serve(async (request) => {
       // The row is the source of truth and it is already written, so this is
       // reported rather than rolled back: the person cannot read or write
       // anything, they simply keep a dead token for a while.
-      console.error('Account status written but the auth ban failed:', banError.message);
+      log.error('auth_ban_failed_after_status_write', { message: banError.message });
       return ok({ ...(data as Record<string, unknown>), sessionRevoked: false });
     }
 

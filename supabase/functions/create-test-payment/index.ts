@@ -14,14 +14,15 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-import { fail, failFromRpc, handleOptions, ok } from '../_shared/http.ts';
+import { fail, failFromRpc, handleOptions, ok, serve } from '../_shared/http.ts';
+import { log } from '../_shared/log.ts';
 import { resolveProvider } from '../_shared/payment-provider.ts';
 
 interface RequestBody {
   bookingId?: string;
 }
 
-Deno.serve(async (request) => {
+serve('create-test-payment', async (request) => {
   if (request.method === 'OPTIONS') return handleOptions();
   if (request.method !== 'POST') return fail('VALIDATION_ERROR', 'Use POST.', 405);
 
@@ -40,7 +41,7 @@ Deno.serve(async (request) => {
 
   const webBaseUrl = Deno.env.get('WEB_PAYMENT_BASE_URL');
   if (!webBaseUrl) {
-    console.error('WEB_PAYMENT_BASE_URL is not set; cannot build a payment URL.');
+    log.error('web_payment_base_url_missing');
     return fail('INTERNAL_ERROR');
   }
 
@@ -48,7 +49,7 @@ Deno.serve(async (request) => {
   try {
     provider = resolveProvider(Deno.env.get('PAYMENT_PROVIDER'), webBaseUrl);
   } catch (error) {
-    console.error(error);
+    log.error('payment_provider_unavailable', { error });
     return fail('INTERNAL_ERROR');
   }
 
@@ -96,7 +97,7 @@ Deno.serve(async (request) => {
   });
 
   if (urlError) {
-    console.error('Could not persist payment_url:', urlError.message);
+    log.error('payment_url_not_persisted', { message: urlError.message });
     return failFromRpc(urlError);
   }
 

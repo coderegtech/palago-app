@@ -269,6 +269,21 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
   exposes name and phone only for incidents `can_manage_sos` allows. Never tell the passenger help
   is coming until a responder has said so.
 
+- **Edge Functions start with `serve('<name>', handler)`, never `Deno.serve`, and never `console.*`.**
+  `serve` (in `_shared/http.ts`) gives every request an id, returns it as `x-request-id`, writes one
+  JSON `request` line with status, refusal code and duration, and turns a throw into the standard
+  envelope. Log with `log.info|warn|error('snake_case_event', {...})` from `_shared/log.ts`, which
+  redacts credentials, e-mails and payment references centrally — a payment token in a log is a
+  payment page anyone with log access can open.
+- **Tree shaking is web-only, on purpose.** `pnpm build:web` turns it on through
+  `scripts/build-web.mjs`, and `metro.config.js` enables `experimentalImportSupport` only when that
+  flag is set. It is experimental in SDK 57 and has never run on a handset; `pnpm web`, `pnpm
+  android` and EAS builds use default module semantics. Async routes are likewise `web: true`,
+  `default: false` — native production does not support them.
+- **iOS ignores `watchPositionAsync`'s `timeInterval`.** It delivers a fix every `distanceInterval`
+  metres, which at speed is more than one insert a second. The GPS publisher throttles itself with
+  `shouldPublishFix`; anything else that watches position must do the same.
+
 - **Account status and availability are two fields and must stay two fields.**
   `profiles.account_status` says whether somebody may sign in;
   `drivers.availability_status` / `assistants.availability_status` say whether they may be given a

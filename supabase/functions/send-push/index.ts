@@ -23,7 +23,8 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-import { fail, handleOptions, ok } from '../_shared/http.ts';
+import { fail, handleOptions, ok, serve } from '../_shared/http.ts';
+import { log } from '../_shared/log.ts';
 
 const EXPO_PUSH_ENDPOINT = 'https://exp.host/--/api/v2/push/send';
 
@@ -64,7 +65,7 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
-Deno.serve(async (request) => {
+serve('send-push', async (request) => {
   if (request.method === 'OPTIONS') return handleOptions();
   if (request.method !== 'POST') return fail('VALIDATION_ERROR', 'Use POST.', 405);
 
@@ -72,7 +73,7 @@ Deno.serve(async (request) => {
   if (!expectedSecret) {
     // Refuse rather than run unauthenticated. An open push endpoint is worse
     // than no push.
-    console.error('PUSH_WEBHOOK_SECRET is not set; refusing to send.');
+    log.error('push_webhook_secret_missing');
     return fail('INTERNAL_ERROR');
   }
 
@@ -101,7 +102,7 @@ Deno.serve(async (request) => {
     .maybeSingle();
 
   if (notificationError) {
-    console.error('Could not read notification:', notificationError.message);
+    log.error('notification_read_failed', { message: notificationError.message });
     return fail('INTERNAL_ERROR');
   }
   if (!notification) return fail('NOT_FOUND');
@@ -112,7 +113,7 @@ Deno.serve(async (request) => {
     .eq('user_id', notification.user_id);
 
   if (tokensError) {
-    console.error('Could not read push tokens:', tokensError.message);
+    log.error('push_tokens_read_failed', { message: tokensError.message });
     return fail('INTERNAL_ERROR');
   }
 
@@ -152,7 +153,11 @@ Deno.serve(async (request) => {
       });
 
       if (!response.ok) {
-        console.error('Expo push rejected the batch:', response.status, await response.text());
+        log.error('expo_push_batch_rejected', {
+          status: response.status,
+          body: await response.text(),
+          size: batch.length,
+        });
         failed += batch.length;
         continue;
       }
@@ -160,7 +165,7 @@ Deno.serve(async (request) => {
       const payload = (await response.json()) as { data?: ExpoTicket[] };
       tickets = payload.data ?? [];
     } catch (error) {
-      console.error('Expo push request failed:', error);
+      log.error('expo_push_request_failed', { error, size: batch.length });
       failed += batch.length;
       continue;
     }
@@ -172,7 +177,7 @@ Deno.serve(async (request) => {
       }
 
       failed += 1;
-      console.error('Expo push ticket error:', ticket.message, ticket.details?.error);
+      log.warn('expo_push_ticket_error', { message: ticket.message, detail: ticket.details?.error });
 
       // The app was uninstalled or the token was reissued. Keeping it means
       // failing forever, so drop it; the device re-registers on next sign-in.
@@ -182,7 +187,7 @@ Deno.serve(async (request) => {
 
   if (staleTokens.length > 0) {
     const { error } = await supabase.from('push_tokens').delete().in('token', staleTokens);
-    if (error) console.error('Could not remove stale push tokens:', error.message);
+    if (error) log.error('stale_push_tokens_not_removed', { message: error.message });
   }
 
   // An Expo ticket only means Expo accepted the message. Whether it reached the
