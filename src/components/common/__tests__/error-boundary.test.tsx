@@ -17,6 +17,10 @@ import { Text } from 'react-native';
 
 import { AppErrorBoundary } from '@/components/common/error-boundary';
 
+// For the one source-scanning test below; see card.test.tsx for why Node's
+// types are declared locally instead of added to tsconfig.
+declare const __dirname: string;
+
 function Boom({ throws }: { throws: boolean }): React.ReactElement {
   if (throws) throw new Error('booking reference PAY-2026-000001 blew up');
   return <Text>The screen rendered</Text>;
@@ -107,5 +111,35 @@ describe('AppErrorBoundary', () => {
 
     expect(screen.getByText('Recovered')).toBeTruthy();
     expect(screen.queryByText('This screen could not be shown')).toBeNull();
+  });
+});
+
+/**
+ * `ObserveErrorBoundary` calls its `fallback` as a plain function inside a
+ * class `render()`. The React Compiler adds a hook to anything shaped like a
+ * component, so a component passed there crashed with "Invalid hook call" the
+ * first time anything threw. Jest does not run the compiler, so the render
+ * tests above cannot see that — these pin the contract instead.
+ */
+describe('the fallback handed to the boundary', () => {
+  it('only builds an element — it never runs a component body outside render', () => {
+    const { isValidElement } = jest.requireActual<typeof import('react')>('react');
+    const { renderFallback } = jest.requireActual<
+      typeof import('@/components/common/error-boundary')
+    >('@/components/common/error-boundary');
+
+    // Called exactly as the boundary calls it: outside any component.
+    const element = renderFallback({ error: new Error('x'), resetError: () => {} });
+    expect(isValidElement(element)).toBe(true);
+    expect(typeof element.type).toBe('function');
+  });
+
+  it('is not a component passed by reference', () => {
+    // Declared locally rather than widening tsconfig's types — see card.test.tsx.
+    const fs = jest.requireActual<{ readFileSync(p: string, e: string): string }>('fs');
+    const path = jest.requireActual<{ join(...p: string[]): string }>('path');
+    const source = fs.readFileSync(path.join(__dirname, '..', 'error-boundary.tsx'), 'utf8');
+    expect(source).toMatch(/fallback=\{renderFallback\}/);
+    expect(source).not.toMatch(/fallback=\{[A-Z]/);
   });
 });

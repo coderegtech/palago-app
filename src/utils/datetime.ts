@@ -40,6 +40,26 @@ export function formatDate(date: string): string {
   return `${MONTHS[month - 1]} ${day}, ${year}`;
 }
 
+/**
+ * A server timestamp (`2026-09-19T05:12:33.1+00:00`) as a calendar date in the
+ * device's own zone: `September 19, 2026`.
+ *
+ * NOT `formatDate(ts)` — that takes a date-only string, so a timestamp's day
+ * became `19T05:12…` → NaN and the SOS history read "September NaN, 2026". And
+ * not `formatDate(ts.slice(0, 10))` either: that is the UTC date, a day early
+ * for anything between midnight and 08:00 in Palawan.
+ */
+export function formatTimestampDate(isoTimestamp: string): string {
+  return formatDate(toISODate(new Date(isoTimestamp)));
+}
+
+/** A server timestamp as `Sep 19, 2026 · 1:12 PM`, in the device's own zone. */
+export function formatTimestamp(isoTimestamp: string): string {
+  const at = new Date(isoTimestamp);
+  const time = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+  return `${SHORT_MONTHS[at.getMonth()]} ${at.getDate()}, ${at.getFullYear()} · ${formatTime(time)}`;
+}
+
 /** `2026-09-15` → `Tue, Sep 15` */
 export function formatDateShort(date: string): string {
   const [year, month, day] = date.split('-').map(Number);

@@ -284,6 +284,18 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
   metres, which at speed is more than one insert a second. The GPS publisher throttles itself with
   `shouldPublishFix`; anything else that watches position must do the same.
 
+- **Never pass a component where a library will *call* it as a function.** The React Compiler
+  memoizes anything shaped like a component, which puts a hook at the top of its body.
+  `ObserveErrorBoundary` calls `fallback(...)` as a plain function inside its class `render()`, so
+  `fallback={Fallback}` threw "Invalid hook call" the first time any screen crashed — the error screen
+  itself died, and the user saw the crash. Hand such props a lower-case function that returns an
+  element (`renderFallback`). Jest does not run the compiler, so only a browser shows this; the
+  boundary test now pins the contract by scanning the source.
+- **`formatDate` takes a date, not a timestamp.** `formatDate(createdAt)` rendered "September NaN,
+  2026" on the SOS history, and `formatDate(createdAt.slice(0, 10))` is the UTC date — a day early
+  from midnight to 08:00 in Palawan. Use `formatTimestamp` / `formatTimestampDate` for anything that
+  ends in `At`.
+
 - **Account status and availability are two fields and must stay two fields.**
   `profiles.account_status` says whether somebody may sign in;
   `drivers.availability_status` / `assistants.availability_status` say whether they may be given a

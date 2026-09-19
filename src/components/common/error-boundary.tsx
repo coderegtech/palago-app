@@ -25,7 +25,12 @@ import { View } from 'react-native';
  * is as likely to be read over a shoulder at a terminal as anywhere else. The
  * detail goes to Observe, which is where it is useful.
  */
-function Fallback({ resetError }: { error: unknown; resetError: () => void }) {
+interface FallbackProps {
+  error: unknown;
+  resetError: () => void;
+}
+
+function Fallback({ resetError }: FallbackProps) {
   return (
     <Screen scroll>
       <View className="flex-1 justify-center gap-6 py-12">
@@ -58,5 +63,26 @@ function Fallback({ resetError }: { error: unknown; resetError: () => void }) {
  * fallback is no better than the white screen it replaces.
  */
 export function AppErrorBoundary({ children }: { children: React.ReactNode }) {
-  return <ObserveErrorBoundary fallback={Fallback}>{children}</ObserveErrorBoundary>;
+  return <ObserveErrorBoundary fallback={renderFallback}>{children}</ObserveErrorBoundary>;
+}
+
+/**
+ * Hands the boundary an ELEMENT, never the component itself.
+ *
+ * `ObserveErrorBoundary` calls a function `fallback` as a plain function —
+ * `fallback({ error, resetError })` inside its class `render()` — not as
+ * `<Fallback />`. The React Compiler memoizes `Fallback` because it looks like a
+ * component, which puts a hook call (`useMemoCache`) at the top of its body;
+ * called as a plain function, that hook ran outside any component and threw
+ * "Invalid hook call". So the first render error anywhere in the app took the
+ * error screen down with it, and the user got a crash where they should have
+ * got "Try again". Jest does not run the compiler, which is why the boundary's
+ * own tests passed.
+ *
+ * Lower-case and outside any component, so the compiler leaves it alone; the
+ * element it returns is rendered by React, where hooks are allowed.
+ */
+export function renderFallback(props: FallbackProps): React.ReactElement {
+  'use no memo';
+  return <Fallback error={props.error} resetError={props.resetError} />;
 }

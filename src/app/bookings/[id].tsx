@@ -21,7 +21,7 @@ import { useBookingDetail, useCancelBooking } from '@/hooks/use-trips';
 import { qrService } from '@/services/qr-service';
 import { AppError } from '@/lib/errors';
 import { useUIStore } from '@/stores/ui-store';
-import { formatDate, formatDuration, formatTime } from '@/utils/datetime';
+import { formatDate, formatDuration, formatTime, formatTimestampDate } from '@/utils/datetime';
 import { formatMoney } from '@/utils/money';
 
 const statusPresentation: Record<BookingStatus, { label: string; tone: BadgeTone }> = {
@@ -354,7 +354,7 @@ export default function BookingDetailScreen() {
       ) : null}
 
       <Text variant="caption" tone="muted" className="mt-4 text-center">
-        Booked {formatDate(b.createdAt.slice(0, 10))}
+        Booked {formatTimestampDate(b.createdAt)}
       </Text>
 
       {/*

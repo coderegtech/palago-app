@@ -18,7 +18,7 @@ import { Colors } from '@/constants/theme';
 import { useLoyalty, useLoyaltyTransactions, useRewards } from '@/hooks/use-loyalty';
 import type { LoyaltyEntry, RewardOption } from '@/services/loyalty-service';
 import { cn } from '@/utils/cn';
-import { formatDate } from '@/utils/datetime';
+import { formatTimestampDate } from '@/utils/datetime';
 import { formatMoney } from '@/utils/money';
 
 /** What a reward is worth, in words a passenger can act on. */
@@ -104,7 +104,7 @@ function EntryRow({ entry }: { entry: LoyaltyEntry }) {
       <View className="flex-1 gap-0.5">
         <Text variant="body">{meta.label}</Text>
         <Text variant="caption" tone="muted" numberOfLines={1}>
-          {entry.reference ?? formatDate(entry.createdAt.slice(0, 10))}
+          {entry.reference ?? formatTimestampDate(entry.createdAt)}
         </Text>
       </View>
       <View className="items-end">

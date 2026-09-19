@@ -37,7 +37,7 @@ import {
 import { AppError } from '@/lib/errors';
 import type { SOSResponderIncident } from '@/services/sos-service';
 import { useUIStore } from '@/stores/ui-store';
-import { formatDate, timeAgo } from '@/utils/datetime';
+import { formatTimestamp, timeAgo } from '@/utils/datetime';
 
 /** Status as a word plus a tone — never colour alone. */
 const statusPresentation: Record<SOSStatus, { label: string; tone: BadgeTone }> = {
@@ -178,7 +178,7 @@ export function SOSMonitor({
                   <View className="flex-row items-center gap-2">
                     <Clock size={12} color={Colors.textMuted} />
                     <Text variant="caption" tone="muted">
-                      Raised {timeAgo(incident.createdAt)} · {formatDate(incident.createdAt)}
+                      Raised {timeAgo(incident.createdAt)} · {formatTimestamp(incident.createdAt)}
                     </Text>
                   </View>
                 </View>
