@@ -21,8 +21,9 @@ import { useBookingDetail, useCancelBooking } from '@/hooks/use-trips';
 import { qrService } from '@/services/qr-service';
 import { AppError } from '@/lib/errors';
 import { useUIStore } from '@/stores/ui-store';
-import { formatDate, formatDuration, formatTime } from '@/utils/datetime';
-import { formatMoney } from '@/utils/money';
+
+import { PriceBreakdown } from '@/components/payment/price-breakdown';
+import { formatDate, formatDateShort, formatDuration, formatTime, formatTimestampDate } from '@/utils/datetime';
 
 const statusPresentation: Record<BookingStatus, { label: string; tone: BadgeTone }> = {
   [BookingStatus.PENDING]: { label: 'Pending', tone: 'neutral' },
@@ -244,43 +245,13 @@ export default function BookingDetailScreen() {
           Fare
         </Text>
         <Card className="gap-2">
-          <View className="flex-row justify-between">
-            <Text variant="body" tone="muted">
-              Subtotal
-            </Text>
-            <Text variant="bodyStrong">{formatMoney(b.subtotal)}</Text>
-          </View>
-
-          {b.discount > 0 ? (
-            <View className="flex-row justify-between">
-              <Text variant="body" tone="muted">
-                Discount
-              </Text>
-              <Text variant="bodyStrong" tone="success">
-                −{formatMoney(b.discount)}
-              </Text>
-            </View>
-          ) : null}
-
-          {b.loyaltyDiscount > 0 ? (
-            <View className="flex-row justify-between">
-              <Text variant="body" tone="muted">
-                Loyalty discount
-              </Text>
-              <Text variant="bodyStrong" tone="success">
-                −{formatMoney(b.loyaltyDiscount)}
-              </Text>
-            </View>
-          ) : null}
-
-          <Divider className="my-1" />
-
-          <View className="flex-row items-end justify-between">
-            <Text variant="bodyStrong">Total</Text>
-            <Text variant="title" tone="primary">
-              {formatMoney(b.totalAmount)}
-            </Text>
-          </View>
+          <PriceBreakdown
+            subtotal={b.subtotal}
+            discount={b.discount}
+            loyaltyDiscount={b.loyaltyDiscount}
+            convenienceFee={b.convenienceFee}
+            totalAmount={b.totalAmount}
+          />
         </Card>
       </View>
 
@@ -329,6 +300,8 @@ export default function BookingDetailScreen() {
             originCode={b.originCode}
             destinationCode={b.destinationCode}
             boardedAt={b.boardedAt}
+            departureLabel={`${formatDateShort(b.departureDate)} · ${formatTime(b.departureTime)}`}
+            downloadable
           />
         ) : null}
       </View>
@@ -354,7 +327,7 @@ export default function BookingDetailScreen() {
       ) : null}
 
       <Text variant="caption" tone="muted" className="mt-4 text-center">
-        Booked {formatDate(b.createdAt.slice(0, 10))}
+        Booked {formatTimestampDate(b.createdAt)}
       </Text>
 
       {/*

@@ -91,6 +91,29 @@ const submitted = await passenger2.supabase.rpc('submit_discount_proof', {
 });
 check('and submit it for a discount', !submitted.error, submitted.error?.message);
 
+// A passenger ID photo too (20260921000042) — one attached to a booking, and one
+// left behind by a checkout that was never finished. Both are government IDs.
+const attachedPhoto = `${passenger2.userId}/verify-reset-attached-${Date.now().toString(36)}.png`;
+const abandonedPhoto = `${passenger2.userId}/verify-reset-abandoned-${Date.now().toString(36)}.png`;
+for (const path of [attachedPhoto, abandonedPhoto]) {
+  const up = await passenger2.supabase.storage
+    .from('passenger-proofs')
+    .upload(path, png, { contentType: 'image/png' });
+  check('a passenger ID photo uploads', !up.error, up.error?.message);
+}
+{
+  const { data: forSale } = await passenger2.supabase
+    .from('trip_search')
+    .select('id')
+    .eq('status', 'SCHEDULED')
+    .limit(1);
+  const withPhoto = await passenger2.supabase.rpc('create_booking', {
+    p_trip_id: forSale?.[0]?.id,
+    p_passengers: [{ name: 'Photo Student', type: 'STUDENT', proofPath: attachedPhoto }],
+  });
+  check('and is attached to a booking', !withPhoto.error, withPhoto.error?.message);
+}
+
 // A cash sale at the counter, taken by an operator who is about to be deleted.
 // A CASH payment must name the clerk who took it, and deleting the clerk first
 // would null `received_by` and fail the reset. The seed has no cash sale, so
@@ -205,6 +228,13 @@ check(
   'the ID photograph is gone from Storage, not just its row',
   !stillThere.error && (stillThere.data ?? []).length === 0,
   JSON.stringify(stillThere.data ?? stillThere.error),
+);
+
+const passengerPhotos = await admin.supabase.storage.from('passenger-proofs').list(passenger2.userId);
+check(
+  "passenger ID photos are gone from Storage too — attached and abandoned alike",
+  !passengerPhotos.error && (passengerPhotos.data ?? []).length === 0,
+  JSON.stringify(passengerPhotos.data ?? passengerPhotos.error),
 );
 
 const { data: seats } = await admin.supabase.from('trip_seats').select('id');

@@ -919,7 +919,17 @@ where t.id = (select trip_id from seed_extra_trips where label = 'HISTORICAL')
 -- Booking 6: Trip D (Cherry, Puerto Princesa to Roxas), two seats, a
 -- redeemed reward and payment from the wallet. The redemption needs points,
 -- which is why this runs after Booking 5 above has already credited some.
+--
+-- At one point per ₱100 (20260919000041) Booking 5 earns only a handful —
+-- far short of the 50 the cheapest reward costs, which one point per ₱10 used
+-- to cover. So passenger2 gets a BONUS first, labelled as seed data in the
+-- ledger itself, rather than the earn rate being bent to suit the fixture.
 -- ---------------------------------------------------------------------------
+
+select public.loyalty_post(
+  (select id from auth.users where email = 'passenger2@palago.test'),
+  'BONUS', 50, null, 'Welcome bonus (seed data)'
+);
 
 with target_trip as (
   select id as trip_id, bus_id, fare from public.trips where trip_number like 'CHERRY-%-D'

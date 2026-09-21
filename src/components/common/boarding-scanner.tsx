@@ -14,6 +14,7 @@ import {
   XCircle,
 } from 'lucide-react-native';
 
+import { IdCheck } from '@/components/common/id-check';
 import { Alert } from '@/components/ui/alert';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -359,8 +360,8 @@ export function BoardingScanner({
                     const onBoard = Boolean(p.boardedAt);
                     const ticked = selected.has(p.id);
                     return (
+                      <View key={p.id}>
                       <Pressable
-                        key={p.id}
                         accessibilityRole="checkbox"
                         accessibilityState={{ checked: onBoard || ticked, disabled: onBoard || !r.valid }}
                         accessibilityLabel={
@@ -387,6 +388,12 @@ export function BoardingScanner({
                         </View>
                         <Badge label={`Seat ${p.seat}`} tone={onBoard ? 'neutral' : 'primary'} />
                       </Pressable>
+                      {/* A sibling of the row, not inside it: a button nested in
+                          a Pressable never receives the touch on a phone. */}
+                      {p.idCheck && !onBoard ? (
+                        <IdCheck passengerName={p.name} type={p.type} proofPath={p.proofPath ?? null} />
+                      ) : null}
+                      </View>
                     );
                   })}
                 </View>

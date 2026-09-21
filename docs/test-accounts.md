@@ -130,5 +130,5 @@ running, and it works on an empty platform straight after **System → Reset dat
 - **Repeatable and additive.** `--seed` fixes the randomness; a per-run tag in codes and e-mails means
   a second run adds a second batch rather than colliding. Terminals are reused by code.
 - **Not generated:** rewards (the catalogue is SQL-only) and completed-trip history (trips cannot be
-  scheduled in the past), so loyalty points start at zero.
+  scheduled in the past). Loyalty points are credited as each booking is paid, one per ₱100.
 - A refused step is listed at the end and the command exits non-zero; it never fakes the row.

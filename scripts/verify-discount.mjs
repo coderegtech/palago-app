@@ -23,6 +23,9 @@ import { createClient } from '@supabase/supabase-js';
 import { loadVerifyEnv } from './_verify-env.mjs';
 
 const { url: URL_, key: KEY } = loadVerifyEnv();
+
+// The fixed convenience fee on every booking (convenience_fee(), 20260921000042).
+const FEE = 1_000;
 const PASSWORD = 'PalawanGo2026';
 
 const client = () => createClient(URL_, KEY, { auth: { persistSession: false } });
@@ -118,7 +121,7 @@ const plain = await book(['ADULT']);
 check('an ordinary booking has no discount', plain.result?.discount === 0, JSON.stringify(plain.result?.discount));
 check(
   'total equals subtotal when nothing is verified',
-  plain.result?.totalAmount === plain.result?.subtotal,
+  plain.result?.totalAmount === plain.result?.subtotal + FEE,
 );
 if (plain.result) await release(plain.result.bookingId);
 
@@ -249,7 +252,7 @@ check(
 );
 check(
   'the total is subtotal minus the discount',
-  discounted.result?.totalAmount === discounted.result?.subtotal - EXPECTED_OFF,
+  discounted.result?.totalAmount === discounted.result?.subtotal - EXPECTED_OFF + FEE,
 );
 check('the reason is recorded', discounted.result?.discountKind === 'SENIOR', discounted.result?.discountKind);
 

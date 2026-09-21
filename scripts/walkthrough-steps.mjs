@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 /**
  * The shot list for docs/walkthrough.md.
  *
@@ -83,12 +86,37 @@ export async function capture(page, { DEVICE, DESKTOP, sleep }) {
     await page.shot('06-passenger-details');
   });
 
+  // Booking for someone else who travels on a discount: choosing Student shows
+  // the ID picture upload for that passenger, and only then.
+  await step('student-id-photo', async () => {
+    await page.click('Regular / Adult');
+    await page.click('Student', { exact: true });
+    await page.waitFor('Upload ID picture');
+    await page.shot('06b-student-id-photo');
+    // Back to a regular passenger, so the payment step can continue without a
+    // photo — the headless browser has no file to pick.
+    await page.click('Student', { exact: true });
+    await page.click('Regular / Adult', { exact: true });
+    await sleep(600);
+  });
+
   await step('payment', async () => {
     await page.fill('Juan Dela Cruz', 'Juan Dela Cruz');
     await page.fill('0917 123 4567', '09171234567');
     await page.click('Continue to payment');
-    await page.waitFor('Pay', 20_000);
+    // Not just "Pay": that matches the screen's own heading while the booking
+    // is still loading, which photographed a spinner.
+    await page.waitFor('Amount to pay', 20_000);
     await page.shot('07-payment');
+  });
+
+  await step('payment-qr', async () => {
+    await page.click('Pay by QR');
+    await page.waitFor('Download QR code', 20_000);
+    await page.shot('07b-payment-qr');
+    const saved = await page.download('Download QR code');
+    const png = fs.readFileSync(path.join(saved.dir, saved.file));
+    console.log(`     downloaded ${saved.file} (${saved.bytes} bytes, PNG: ${png.subarray(1, 4).toString() === 'PNG'})`);
   });
 
   await step('wallet', async () => {
@@ -110,9 +138,17 @@ export async function capture(page, { DEVICE, DESKTOP, sleep }) {
   });
 
   await step('ticket-detail', async () => {
-    await page.click('PPS');
-    await sleep(2500);
+    // A confirmed ticket, not merely the first "PPS" on the list: the list is
+    // newest first, and the newest can be a refunded booking with no pass.
+    // Scrolled to first: every unpaid booking a run leaves sits above it.
+    await page.scrollTo('Confirmed');
+    await page.click('Confirmed', { exact: true });
+    await page.waitFor('Download QR code', 15_000);
+    await page.scrollTo('Show this to the operator');
     await page.shot('09-boarding-pass');
+    const saved = await page.download('Download QR code');
+    const png = fs.readFileSync(path.join(saved.dir, saved.file));
+    console.log(`     downloaded ${saved.file} (${saved.bytes} bytes, PNG: ${png.subarray(1, 4).toString() === 'PNG'})`);
   });
 
   await step('tracking', async () => {
@@ -125,6 +161,16 @@ export async function capture(page, { DEVICE, DESKTOP, sleep }) {
     await page.go('/sos');
     await page.waitFor('Emergency');
     await page.shot('13-sos');
+  });
+
+  // Sent for real, so the operator, driver and admin shots further down show
+  // the responder panel with an alert in it — name, Call button, trip and
+  // coach — rather than only its empty state. The seed has no open alert.
+  await step('sos-sent', async () => {
+    await page.allowLocation({ latitude: 10.3194, longitude: 119.346 }); // near Roxas
+    await page.click('Send SOS');
+    await page.waitFor('Alert sent', 20_000);
+    await page.shot('16-sos-sent');
   });
 
   await step('discount', async () => {
@@ -149,6 +195,12 @@ export async function capture(page, { DEVICE, DESKTOP, sleep }) {
     await page.signIn('operator@palago.test');
     await page.waitFor('Passengers booked', 20_000);
     await page.shot('20-operator-dashboard');
+  });
+
+  await step('operator-sos', async () => {
+    await page.scrollTo('Emergency alerts');
+    await page.waitFor('Call passenger');
+    await page.shot('20b-operator-sos-alert');
   });
 
   await step('schedule', async () => {

@@ -3,6 +3,8 @@ import {
   countdownUntil,
   formatDate,
   formatDateShort,
+  formatTimestamp,
+  formatTimestampDate,
   formatDuration,
   formatTime,
   minutesUntil,
@@ -107,5 +109,31 @@ describe('timeAgo', () => {
 
   it('does not report a negative age when a clock runs fast', () => {
     expect(ago('2026-09-14T12:05:00Z')).toBe('just now');
+  });
+});
+
+describe('timestamps', () => {
+  // Built from local components so the expectation holds in any timezone the
+  // tests run in, exactly as the device's zone is what the screen should use.
+  const local = new Date(2026, 8, 19, 13, 5);
+  const iso = local.toISOString();
+
+  it('formats a server timestamp — never "NaN", which formatDate(timestamp) gave', () => {
+    expect(formatTimestampDate(iso)).toBe('September 19, 2026');
+    expect(formatTimestamp(iso)).toBe('Sep 19, 2026 · 1:05 PM');
+    expect(formatTimestamp(iso)).not.toContain('NaN');
+  });
+
+  it('uses the local calendar day, not the UTC one', () => {
+    // 00:30 local is still the previous day in UTC anywhere east of Greenwich —
+    // Palawan included — which is what `.slice(0, 10)` got wrong.
+    const justAfterMidnight = new Date(2026, 8, 20, 0, 30).toISOString();
+    expect(formatTimestampDate(justAfterMidnight)).toBe('September 20, 2026');
+  });
+
+  it('accepts the microsecond, offset form PostgREST returns', () => {
+    const utc = new Date(Date.UTC(2026, 8, 19, 5, 12, 33));
+    const postgrest = '2026-09-19T05:12:33.123456+00:00';
+    expect(formatTimestampDate(postgrest)).toBe(formatTimestampDate(utc.toISOString()));
   });
 });

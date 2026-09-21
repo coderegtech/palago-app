@@ -20,6 +20,9 @@ import { loadVerifyEnv } from './_verify-env.mjs';
 import { makeInvoke } from './_verify-invoke.mjs';
 
 const { url: URL_, key: KEY } = loadVerifyEnv();
+
+// The fixed convenience fee on every booking (convenience_fee(), 20260921000042).
+const FEE = 1_000;
 const PASSWORD = 'PalawanGo2026';
 
 const client = () => createClient(URL_, KEY, { auth: { persistSession: false } });
@@ -108,8 +111,8 @@ check(
 );
 check(
   'the amount equals the booking total, not anything the client sent',
-  payment?.amount === trip.fare * 2,
-  `${payment?.amount} vs ${trip.fare * 2}`,
+  payment?.amount === trip.fare * 2 + FEE,
+  `${payment?.amount} vs ${trip.fare * 2 + FEE}`,
 );
 check('the provider is MOCK', payment?.provider === 'MOCK', payment?.provider);
 

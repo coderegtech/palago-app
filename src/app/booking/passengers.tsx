@@ -14,6 +14,8 @@ import { PassengerType } from '@/constants/enums';
 import { useAuth } from '@/hooks/use-auth';
 import { useCreateBooking } from '@/hooks/use-trips';
 import { AppError } from '@/lib/errors';
+import { useActiveDiscount } from '@/hooks/use-discount';
+import { passengersMissingIdPhoto } from '@/utils/passenger-proof';
 import { PassengerFields } from '@/components/booking/passenger-fields';
 import { passengersFormSchema, type PassengersFormInput } from '@/schemas/booking';
 import { useBookingStore } from '@/stores/booking-store';
@@ -30,7 +32,11 @@ export default function PassengersScreen() {
 
   const reserve = useCreateBooking();
 
-  const { control, handleSubmit } = useForm<PassengersFormInput>({
+  // The booker's own verified ID covers one passenger of that kind with no
+  // photo — exactly as `create_booking` prices it.
+  const activeDiscount = useActiveDiscount();
+
+  const { control, handleSubmit, setError } = useForm<PassengersFormInput>({
     resolver: zodResolver(passengersFormSchema),
     defaultValues: { passengers: [] },
   });
@@ -52,6 +58,28 @@ export default function PassengersScreen() {
   }, [passengerCount, profile?.fullName, profile?.phone, profile?.email, replace]);
 
   const onSubmit = handleSubmit(({ passengers }) => {
+    // A senior, student or PWD passenger needs an ID photo unless the
+    // booker's own approved ID covers them. Stopped here rather than priced
+    // at full fare on the server, so the amount on the next screen is the
+    // amount the booker expected.
+    const missing = passengersMissingIdPhoto(passengers, activeDiscount.data ?? null);
+    if (missing.length > 0) {
+      for (const index of missing) {
+        setError(`passengers.${index}.proofPath`, {
+          message: 'Upload a photo of this passenger’s ID, or change the passenger type.',
+        });
+      }
+      showToast({
+        tone: 'warning',
+        title: 'ID picture needed',
+        message:
+          missing.length === 1
+            ? `Passenger ${missing[0] + 1} needs an ID picture for the discount.`
+            : `Passengers ${missing.map((i) => i + 1).join(', ')} need an ID picture for the discount.`,
+      });
+      return;
+    }
+
     // Guarded rather than silently ignored: the button is disabled below when
     // there is no trip, so reaching here without one would be a bug, and a
     // no-op submit is the hardest kind of bug to notice.

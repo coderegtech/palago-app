@@ -37,7 +37,7 @@ import {
 import { AppError } from '@/lib/errors';
 import type { SOSResponderIncident } from '@/services/sos-service';
 import { useUIStore } from '@/stores/ui-store';
-import { formatDate, timeAgo } from '@/utils/datetime';
+import { formatTimestamp, timeAgo } from '@/utils/datetime';
 
 /** Status as a word plus a tone — never colour alone. */
 const statusPresentation: Record<SOSStatus, { label: string; tone: BadgeTone }> = {
@@ -178,7 +178,7 @@ export function SOSMonitor({
                   <View className="flex-row items-center gap-2">
                     <Clock size={12} color={Colors.textMuted} />
                     <Text variant="caption" tone="muted">
-                      Raised {timeAgo(incident.createdAt)} · {formatDate(incident.createdAt)}
+                      Raised {timeAgo(incident.createdAt)} · {formatTimestamp(incident.createdAt)}
                     </Text>
                   </View>
                 </View>
@@ -188,11 +188,15 @@ export function SOSMonitor({
                 />
               </View>
 
+              {/* One strong action — calling the passenger — and the rest as
+                  outlines sized to their labels, so five actions wrap into a
+                  row instead of stacking into a wall of full-width buttons. */}
               <View className="flex-row flex-wrap gap-2">
                 {incident.passengerPhone ? (
                   <Button
                     label="Call passenger"
                     size="sm"
+                    fullWidth={false}
                     icon={<Phone size={14} color={Colors.textInverse} />}
                     onPress={() => open(sosCallUrl(incident.passengerPhone as string))}
                     accessibilityLabel={`Call ${incident.passengerName} on ${incident.passengerPhone}`}
@@ -201,7 +205,8 @@ export function SOSMonitor({
                 <Button
                   label="Open map"
                   size="sm"
-                  variant="secondary"
+                    fullWidth={false}
+                  variant="outline"
                   onPress={() => open(sosMapUrl(incident.latitude, incident.longitude))}
                   accessibilityLabel="Open the passenger's location in a map"
                 />
@@ -209,7 +214,8 @@ export function SOSMonitor({
                   <Button
                     label="Acknowledge"
                     size="sm"
-                    variant="secondary"
+                    fullWidth={false}
+                    variant="outline"
                     loading={acking === incident.id}
                     onPress={() =>
                       void run(() => acknowledge.mutateAsync(incident.id), 'Alert acknowledged')
@@ -221,7 +227,8 @@ export function SOSMonitor({
                   <Button
                     label="Responding"
                     size="sm"
-                    variant="secondary"
+                    fullWidth={false}
+                    variant="outline"
                     loading={responding === incident.id}
                     onPress={() =>
                       void run(() => respond.mutateAsync(incident.id), 'Marked as responding')
@@ -232,7 +239,8 @@ export function SOSMonitor({
                 <Button
                   label="Resolve"
                   size="sm"
-                  variant="secondary"
+                    fullWidth={false}
+                  variant="outline"
                   onPress={() => {
                     setNote('');
                     setResolving(incident);

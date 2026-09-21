@@ -1,5 +1,6 @@
 import { Controller, type Control } from 'react-hook-form';
 
+import { PassengerIdPhoto } from '@/components/booking/passenger-id-photo';
 import { FormInput } from '@/components/common/form-input';
 import { Card } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
@@ -8,11 +9,11 @@ import { PassengerType } from '@/constants/enums';
 import type { PassengersFormInput } from '@/schemas/booking';
 
 const PASSENGER_TYPES = [
-  { value: PassengerType.ADULT, label: 'Adult' },
+  { value: PassengerType.ADULT, label: 'Regular / Adult' },
   { value: PassengerType.CHILD, label: 'Child' },
-  { value: PassengerType.SENIOR, label: 'Senior', description: 'Discount applied by the operator' },
-  { value: PassengerType.STUDENT, label: 'Student' },
-  { value: PassengerType.PWD, label: 'PWD', description: 'Person with disability' },
+  { value: PassengerType.SENIOR, label: 'Senior citizen', description: '20% off — ID photo required' },
+  { value: PassengerType.STUDENT, label: 'Student', description: '20% off — ID photo required' },
+  { value: PassengerType.PWD, label: 'PWD', description: 'Person with disability · 20% off — ID photo required' },
 ];
 
 export interface PassengerFieldsProps {
@@ -69,6 +70,8 @@ export function PassengerFields({ control, index, title }: PassengerFieldsProps)
           />
         )}
       />
+
+      <PassengerIdPhoto control={control} index={index} />
 
       <FormInput
         control={control}

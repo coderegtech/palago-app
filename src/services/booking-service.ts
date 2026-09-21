@@ -25,6 +25,8 @@ export interface ReservationResult {
   subtotal: Centavos;
   discount: Centavos;
   loyaltyDiscount: Centavos;
+  /** The fixed ₱10.00 convenience fee, already inside `totalAmount`. */
+  convenienceFee: Centavos;
   totalAmount: Centavos;
   currency: string;
   seatCount: number;
@@ -41,6 +43,8 @@ export interface BookingPassengerView {
   type: PassengerType;
   phone: string | null;
   email: string | null;
+  /** Path of the ID photo attached for this passenger, if any. */
+  proofPath: string | null;
 }
 
 /** A booking with everything the detail screen shows. */
@@ -70,6 +74,8 @@ export interface BookingSummary {
   discount: Centavos;
   /** Reduction from a redeemed reward. Phase 10. */
   loyaltyDiscount: Centavos;
+  /** Fixed convenience fee inside `totalAmount`. 0 on bookings made before it existed. */
+  convenienceFee: Centavos;
   currency: string;
   expiresAt: string | null;
   createdAt: string;
@@ -87,7 +93,7 @@ export interface BookingSummary {
 }
 
 const DETAIL_COLUMNS =
-  'id, booking_reference, status, total_amount, subtotal, discount, loyalty_discount, ' +
+  'id, booking_reference, status, total_amount, subtotal, discount, loyalty_discount, convenience_fee, ' +
   'currency, expires_at, created_at, confirmed_at, cancelled_at, ' +
   'checked_in_at, boarded_at, trip_id, ' +
   'trips!inner(trip_number, departure_date, departure_time, arrival_time, status, ' +
@@ -96,11 +102,11 @@ const DETAIL_COLUMNS =
   '  routes!inner(duration_minutes, ' +
   '               origin:terminals!routes_origin_terminal_id_fkey(name, code), ' +
   '               destination:terminals!routes_destination_terminal_id_fkey(name, code))), ' +
-  'booking_passengers(id, passenger_name, passenger_type, phone, email, ' +
+  'booking_passengers(id, passenger_name, passenger_type, phone, email, proof_path, ' +
   '  bus_seats(seat_number))';
 
 const BOOKING_COLUMNS =
-  'id, booking_reference, status, total_amount, subtotal, discount, loyalty_discount, ' +
+  'id, booking_reference, status, total_amount, subtotal, discount, loyalty_discount, convenience_fee, ' +
   'currency, expires_at, created_at, confirmed_at, cancelled_at, trip_id, ' +
   'trips!inner(trip_number, departure_date, departure_time, ' +
   '  operators!inner(name), ' +
@@ -116,6 +122,7 @@ type BookingRow = {
   subtotal: number;
   discount: number;
   loyalty_discount: number;
+  convenience_fee: number;
   currency: string;
   expires_at: string | null;
   created_at: string;
@@ -157,6 +164,7 @@ type DetailRow = Omit<BookingRow, 'trips' | 'booking_passengers'> & {
   booking_passengers: (BookingRow['booking_passengers'][number] & {
     phone: string | null;
     email: string | null;
+    proof_path: string | null;
   })[];
 };
 
@@ -169,6 +177,7 @@ function toSummary(row: BookingRow): BookingSummary {
     subtotal: row.subtotal,
     discount: row.discount,
     loyaltyDiscount: row.loyalty_discount,
+    convenienceFee: row.convenience_fee,
     currency: row.currency,
     expiresAt: row.expires_at,
     createdAt: row.created_at,
@@ -213,6 +222,10 @@ export const bookingService = {
         phone: p.phone || null,
         email: p.email || null,
         type: p.type,
+        // A discounted passenger's ID photo, already uploaded to the caller's
+        // own folder. The server checks it is theirs and an image before it
+        // prices the line — see `assert_passenger_proof`.
+        proofPath: p.proofPath || null,
       })),
     });
 
@@ -263,6 +276,7 @@ export const bookingService = {
       subtotal: row.subtotal,
       discount: row.discount,
       loyaltyDiscount: row.loyalty_discount,
+      convenienceFee: row.convenience_fee,
       confirmedAt: row.confirmed_at,
       cancelledAt: row.cancelled_at,
       checkedInAt: row.checked_in_at,
@@ -279,6 +293,7 @@ export const bookingService = {
           type: p.passenger_type,
           phone: p.phone,
           email: p.email,
+          proofPath: p.proof_path,
         }))
         // Unseated passengers (not yet paid) keep their entry order.
         .sort((a, b) =>

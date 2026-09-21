@@ -142,6 +142,7 @@ export type Database = {
           passenger_name: string
           passenger_type: Database["public"]["Enums"]["passenger_type"]
           phone: string | null
+          proof_path: string | null
           seat_id: string | null
           user_id: string | null
         }
@@ -157,6 +158,7 @@ export type Database = {
           passenger_name: string
           passenger_type?: Database["public"]["Enums"]["passenger_type"]
           phone?: string | null
+          proof_path?: string | null
           seat_id?: string | null
           user_id?: string | null
         }
@@ -172,6 +174,7 @@ export type Database = {
           passenger_name?: string
           passenger_type?: Database["public"]["Enums"]["passenger_type"]
           phone?: string | null
+          proof_path?: string | null
           seat_id?: string | null
           user_id?: string | null
         }
@@ -206,6 +209,7 @@ export type Database = {
           cancelled_at: string | null
           checked_in_at: string | null
           confirmed_at: string | null
+          convenience_fee: number
           created_at: string
           created_by: string | null
           currency: string
@@ -228,6 +232,7 @@ export type Database = {
           cancelled_at?: string | null
           checked_in_at?: string | null
           confirmed_at?: string | null
+          convenience_fee?: number
           created_at?: string
           created_by?: string | null
           currency?: string
@@ -250,6 +255,7 @@ export type Database = {
           cancelled_at?: string | null
           checked_in_at?: string | null
           confirmed_at?: string | null
+          convenience_fee?: number
           created_at?: string
           created_by?: string | null
           currency?: string
@@ -810,6 +816,7 @@ export type Database = {
           amount: number
           booking_id: string
           cancelled_at: string | null
+          convenience_fee: number
           created_at: string
           currency: string
           expires_at: string | null
@@ -830,6 +837,7 @@ export type Database = {
           amount: number
           booking_id: string
           cancelled_at?: string | null
+          convenience_fee?: number
           created_at?: string
           currency?: string
           expires_at?: string | null
@@ -850,6 +858,7 @@ export type Database = {
           amount?: number
           booking_id?: string
           cancelled_at?: string | null
+          convenience_fee?: number
           created_at?: string
           currency?: string
           expires_at?: string | null
@@ -1127,6 +1136,7 @@ export type Database = {
         Row: {
           amount: number
           booking_id: string
+          convenience_fee: number
           currency: string
           id: string
           issued_at: string
@@ -1138,6 +1148,7 @@ export type Database = {
         Insert: {
           amount: number
           booking_id: string
+          convenience_fee?: number
           currency?: string
           id?: string
           issued_at?: string
@@ -1149,6 +1160,7 @@ export type Database = {
         Update: {
           amount?: number
           booking_id?: string
+          convenience_fee?: number
           currency?: string
           id?: string
           issued_at?: string
@@ -2302,6 +2314,10 @@ export type Database = {
       }
       active_uid: { Args: never; Returns: string }
       admin_dashboard: { Args: { p_date?: string }; Returns: Json }
+      assert_passenger_proof: {
+        Args: { p_path: string; p_uploader: string }
+        Returns: undefined
+      }
       assign_seats_for_booking: {
         Args: { p_booking_id: string }
         Returns: number
@@ -2339,6 +2355,7 @@ export type Database = {
       can_publish_location: { Args: { p_trip_id: string }; Returns: boolean }
       can_scan_trip: { Args: { p_trip_id: string }; Returns: boolean }
       can_track_trip: { Args: { p_trip_id: string }; Returns: boolean }
+      can_view_passenger_proof: { Args: { p_path: string }; Returns: boolean }
       cancel_booking: { Args: { p_booking_id: string }; Returns: Json }
       cancel_reward_redemption: {
         Args: { p_booking_id: string }
@@ -2362,6 +2379,7 @@ export type Database = {
         Args: { p_ip_address?: string; p_reference: string; p_token: string }
         Returns: Json
       }
+      convenience_fee: { Args: never; Returns: number }
       create_booking: {
         Args: {
           p_passengers: Json
@@ -2499,6 +2517,7 @@ export type Database = {
       next_payment_reference: { Args: never; Returns: string }
       next_receipt_number: { Args: never; Returns: string }
       operator_dashboard: { Args: { p_date?: string }; Returns: Json }
+      passenger_proof_objects: { Args: never; Returns: string[] }
       pay_booking_with_wallet: { Args: { p_booking_id: string }; Returns: Json }
       provision_staff_account: {
         Args: {
@@ -2513,6 +2532,7 @@ export type Database = {
         }
         Returns: Json
       }
+      prune_bus_locations: { Args: { p_batch_size?: number }; Returns: number }
       public_setting: { Args: { p_key: string }; Returns: string }
       record_counter_payment: {
         Args: {
@@ -2544,6 +2564,10 @@ export type Database = {
         Returns: Json
       }
       respond_sos: { Args: { p_sos_id: string }; Returns: Json }
+      reverse_loyalty_for_booking: {
+        Args: { p_booking_id: string }
+        Returns: number
+      }
       review_discount_eligibility: {
         Args: {
           p_approve: boolean
@@ -2788,6 +2812,7 @@ export type Database = {
         | "EXPIRED"
         | "ADJUSTED"
         | "BONUS"
+        | "REVERSED"
       notification_type:
         | "BOOKING_CONFIRMED"
         | "PAYMENT_CONFIRMED"
@@ -3004,6 +3029,7 @@ export const Constants = {
         "EXPIRED",
         "ADJUSTED",
         "BONUS",
+        "REVERSED",
       ],
       notification_type: [
         "BOOKING_CONFIRMED",

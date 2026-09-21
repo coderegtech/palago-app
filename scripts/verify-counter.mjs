@@ -29,6 +29,9 @@ import { loadVerifyEnv } from './_verify-env.mjs';
 import { makeInvoke } from './_verify-invoke.mjs';
 
 const { url: URL_, key: KEY } = loadVerifyEnv();
+
+// The fixed convenience fee on every booking (convenience_fee(), 20260921000042).
+const FEE = 1_000;
 const PASSWORD = 'PalawanGo2026';
 
 const client = () => createClient(URL_, KEY, { auth: { persistSession: false } });
@@ -156,7 +159,7 @@ if (!sale.error) {
   check('it is marked as sold at a counter', row?.source === 'OPERATOR', row?.source);
   check('and as a printed ticket', row?.ticket_type === 'PRINTED', row?.ticket_type);
   check('it opens unpaid', row?.status === 'PAYMENT_PENDING', row?.status);
-  check('priced at two fares', row?.total_amount === trip.fare * 2, `${row?.total_amount}`);
+  check('priced at two fares plus the fee', row?.total_amount === trip.fare * 2 + FEE, `${row?.total_amount}`);
 
   const held = (
     await admin.supabase.from('trip_seats').select('status').eq('booking_id', booking.bookingId)
@@ -243,7 +246,7 @@ if (booking) {
   check('the payment is recorded as cash', payment?.method === 'CASH', payment?.method);
   check('with CASH as the provider, not a mock one', payment?.provider === 'CASH', payment?.provider);
   check('naming the person who took it', payment?.received_by === roro.userId, String(payment?.received_by));
-  check('for the full fare', payment?.amount === trip.fare * 2, `${payment?.amount}`);
+  check('for the full fare and the fee', payment?.amount === trip.fare * 2 + FEE, `${payment?.amount}`);
   check('and the time it was taken', Boolean(payment?.paid_at));
 
   const receipt = (

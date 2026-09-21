@@ -219,11 +219,24 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
   specific columns only, so `status`, `actual_departure_at` and `actual_arrival_at` move through
   `set_trip_boarding` / `start_trip` / `end_trip` and nothing else. A direct status write skips the
   booking transitions and the loyalty award.
-- **A claimed passenger type is not a discount.** `booking_passengers.passenger_type` comes straight
-  from the client. It was harmless while it did not touch the price; since the senior/student/PWD
-  discount, it does. `reserve_seats` therefore keys the 20% off an APPROVED `discount_eligibilities`
-  row — which no client can write — never off the claimed type alone. Anything new that prices by
-  passenger type must do the same, or typing SENIOR becomes a free 20% off.
+- **A claimed passenger type is not a discount — a photo of the ID is, checked at the door.**
+  `booking_passengers.passenger_type` comes straight from the client, so typing SENIOR alone still
+  discounts nothing. Two things do: the booker's own APPROVED `discount_eligibilities` row (one line
+  of their kind), or — decided with the product owner in 20260921000042, so that someone can book
+  for another person — an ID photo attached to that passenger's line. `create_booking` runs every
+  photo through `assert_passenger_proof`: in `passenger-proofs`, in the CALLER's folder, uploaded by
+  them, an image ≤ 5 MB, on a SENIOR/STUDENT/PWD line — or it refuses the whole booking rather than
+  pricing it differently from what the screen showed. The trade is explicit: a fake photo gets the
+  discount until the door, where `validate_booking_qr` flags the passenger `idCheck` and the crew
+  can open the photo. Anything new that prices by passenger type must go through the same two
+  paths. The photos are government IDs: private bucket, no update or delete, read only through
+  `can_view_passenger_proof`, and removed by the data reset (`passenger_proof_objects`).
+- **Every booking carries a ₱10 convenience fee, in its own column, never discounted.**
+  `bookings_total_adds_up` is `total = subtotal − discount − loyalty_discount + convenience_fee`,
+  so a function that recomputes a total and forgets the fee fails the constraint instead of
+  undercharging. Payments and receipts copy the fee by trigger, like the loyalty credit. Loyalty
+  points are on the fare, not the fee. The client mirrors the fee only to *estimate* a counter sale,
+  and the counter refuses to record cash if the server's total differs from the estimate.
 - **Uploading an ID is not approval.** A `discount_eligibilities` row starts PENDING and discounts
   nothing until an operator or admin approves it through `review_discount_eligibility`. The proof
   bucket `discount-proofs` is private and holds government IDs: read them only through a short-lived
@@ -283,6 +296,25 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
 - **iOS ignores `watchPositionAsync`'s `timeInterval`.** It delivers a fix every `distanceInterval`
   metres, which at speed is more than one insert a second. The GPS publisher throttles itself with
   `shouldPublishFix`; anything else that watches position must do the same.
+
+- **Never pass a component where a library will *call* it as a function.** The React Compiler
+  memoizes anything shaped like a component, which puts a hook at the top of its body.
+  `ObserveErrorBoundary` calls `fallback(...)` as a plain function inside its class `render()`, so
+  `fallback={Fallback}` threw "Invalid hook call" the first time any screen crashed — the error screen
+  itself died, and the user saw the crash. Hand such props a lower-case function that returns an
+  element (`renderFallback`). Jest does not run the compiler, so only a browser shows this; the
+  boundary test now pins the contract by scanning the source.
+- **`formatDate` takes a date, not a timestamp.** `formatDate(createdAt)` rendered "September NaN,
+  2026" on the SOS history, and `formatDate(createdAt.slice(0, 10))` is the UTC date — a day early
+  from midnight to 08:00 in Palawan. Use `formatTimestamp` / `formatTimestampDate` for anything that
+  ends in `At`.
+
+- **Loyalty points are credited by a trigger on `payments`, not by the payment functions.**
+  `payments_sync_loyalty` runs `award_loyalty_for_booking` when any row becomes PAID and
+  `reverse_loyalty_for_booking` when one goes PAID → REFUNDED — one point per ₱100 actually paid,
+  each exactly once by a partial unique index. A new payment path therefore earns points without
+  being taught to; do not add an award call to it, and do not credit points anywhere else. A refund
+  must reverse, or pay → refund becomes a loop that prints points.
 
 - **Account status and availability are two fields and must stay two fields.**
   `profiles.account_status` says whether somebody may sign in;

@@ -23,7 +23,7 @@ import { AppError } from '@/lib/errors';
 import type { SOSIncident } from '@/services/sos-service';
 import { OPEN_SOS_STATUSES } from '@/services/sos-service';
 import { useUIStore } from '@/stores/ui-store';
-import { formatDate } from '@/utils/datetime';
+import { formatTimestamp } from '@/utils/datetime';
 
 /**
  * Status as a word plus a tone — never colour alone.
@@ -115,7 +115,7 @@ function IncidentRow({ incident }: { incident: SOSIncident }) {
             </Text>
           </View>
           <Text variant="caption" tone="muted">
-            {formatDate(incident.createdAt)}
+            {formatTimestamp(incident.createdAt)}
           </Text>
         </View>
         <Badge label={presentation.label} tone={presentation.tone} />

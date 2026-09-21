@@ -72,6 +72,14 @@ export const passengerDetailSchema = z.object({
     ],
     { error: 'Choose a passenger type' },
   ),
+  /**
+   * The uploaded ID photo for a senior, student or PWD passenger — a path in
+   * the caller's own folder of the `passenger-proofs` bucket. Whether one is
+   * REQUIRED depends on who is booking (see `passengersMissingIdPhoto`), so it
+   * is checked on submit rather than here; the server re-checks the file
+   * itself before it discounts anything.
+   */
+  proofPath: z.string().optional(),
 });
 export type PassengerDetailInput = z.infer<typeof passengerDetailSchema>;
 

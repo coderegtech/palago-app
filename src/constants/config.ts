@@ -70,11 +70,24 @@ export const WALLET_MAX_BALANCE = 5_000_000; // ₱50,000.00
 export const WALLET_TOP_UP_PRESETS = [50_000, 100_000, 200_000, 500_000] as const;
 
 /**
- * Centavos that earn one loyalty point: ₱10.00. Mirrored by
- * `loyalty_points_for()` in the database, which is the authority — points are
- * awarded server-side when a trip completes, never computed by the client.
+ * Centavos that earn one loyalty point: ₱100.00 — floor(paid / ₱100), whole
+ * points only. Mirrored by `loyalty_points_for()` in the database, which is
+ * the authority: points are credited server-side the moment a booking's
+ * payment succeeds (and reversed if it is refunded), never computed by the
+ * client. This copy exists only to say the rule on screen.
  */
-export const LOYALTY_CENTAVOS_PER_POINT = 1_000;
+export const LOYALTY_CENTAVOS_PER_POINT = 100_00;
+
+/**
+ * The fixed convenience fee on every booking: ₱10.00. Mirrored by
+ * `convenience_fee()` in the database, which is the authority and which writes
+ * it onto the booking. This copy is only for estimating a total before the
+ * server has priced a booking — the counter, which confirms cash in hand.
+ */
+export const CONVENIENCE_FEE_CENTAVOS = 1_000;
+
+/** The senior / student / PWD discount, in basis points. Mirrors `discount_rate_bps()`. */
+export const DISCOUNT_RATE_BPS = 2_000;
 
 /*
  * The TEST_MODE_LABEL / TEST_PAYMENT_WARNING strings were removed when the

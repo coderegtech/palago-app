@@ -32,7 +32,7 @@ import { AppError } from '@/lib/errors';
 import type { WalletEntry } from '@/services/wallet-service';
 import { useUIStore } from '@/stores/ui-store';
 import { cn } from '@/utils/cn';
-import { formatDate } from '@/utils/datetime';
+import { formatTimestampDate } from '@/utils/datetime';
 import { formatMoney, pesosToCentavos } from '@/utils/money';
 
 /**
@@ -90,7 +90,7 @@ function EntryRow({ entry }: { entry: WalletEntry }) {
       <View className="flex-1 gap-0.5">
         <Text variant="bodyStrong">{meta.label}</Text>
         <Text variant="caption" tone="muted" numberOfLines={1}>
-          {entry.reference ?? entry.description ?? formatDate(entry.createdAt.slice(0, 10))}
+          {entry.reference ?? entry.description ?? formatTimestampDate(entry.createdAt)}
         </Text>
       </View>
 

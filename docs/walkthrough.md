@@ -108,15 +108,34 @@ travel on one booking, and they are booked in a single transaction: either
 everybody gets a seat or nobody does, so a family is never split across two
 buses by a half-finished checkout.
 
-The passenger *type* here is a claim, not a discount. Selecting SENIOR does not
-reduce the fare — a verified discount comes from an approved ID, which is
-[a separate flow](#discounts).
+Every passenger starts as **Regular / Adult**, and a regular passenger is asked
+for nothing more.
+
+<img src="screenshots/06b-student-id-photo.png" width="320" alt="Passenger type set to Student, with the Student ID photo panel and its Upload ID picture button" />
+
+Change the type to Student, Senior citizen or PWD and an **Upload ID picture**
+panel appears for that passenger — and disappears, taking the photo with it, if
+the type is changed back. This is what lets someone book for somebody else:
+Person A books for Person B, a student, and attaches B's school ID from their own
+phone. The photo gives that passenger 20% off the fare at booking, and the crew
+compare it with the real card at the door, where the scan says **Check student
+ID** and opens the photo. The server checks every photo before it prices
+anything — it must be the booker's own upload, an image, at most 5 MB, on a
+discounted passenger — and only the booker, the trip's crew and operator, and
+admins can see it. A booker whose own account ID is already verified is not asked
+again for themselves.
 
 ### Paying
 
-<img src="screenshots/07-payment.png" width="320" alt="Payment screen: seats reserved, ten-minute timer, amount to pay, and a wallet balance too low to cover it" />
+<img src="screenshots/07-payment.png" width="320" alt="Payment screen: base fare, discount, ₱10 convenience fee and amount to pay, with a ten-minute timer" />
 
-Two things on this screen are worth reading twice.
+What the booking costs is laid out before anything is paid: **base fare,
+discount, convenience fee, total**. The ₱10.00 convenience fee is on every
+booking — fixed, not a percentage, and never reduced by a discount or a reward —
+and it is stored as its own figure on the booking, the payment and the receipt.
+Every line comes from the booking the server priced; the screen adds nothing up.
+
+Two more things on this screen are worth reading twice.
 
 **"Seats — Assigned after payment."** Capacity is held for ten minutes, but the
 actual seat numbers are not handed out until the money has cleared. That is
@@ -128,8 +147,13 @@ go back on sale. Nothing about it is decided by the app — the expiry is on the
 row in the database.
 
 The wallet option is offered but disabled, with the shortfall spelled out
-(`₱210.00 · ₱490.00 short`) rather than a greyed-out button that does not say
+(`₱210.00 · ₱500.00 short`) rather than a greyed-out button that does not say
 why.
+
+<img src="screenshots/07b-payment-qr.png" width="320" alt="Payment QR code with a Download QR code button, the time left to pay and the amount" />
+
+**Download QR code** saves the payment code as an image — on a phone it opens
+the share sheet — so it can be paid from another device or by someone else.
 
 Paying by QR opens a payment page in a browser with no PalaGo session — the
 token in the QR is the entire credential, and the page is deliberately narrow:
@@ -140,9 +164,13 @@ passenger or their other bookings.
 
 <img src="screenshots/08-tickets.png" width="320" alt="My tickets: upcoming and past bookings" />
 
-<img src="screenshots/09-boarding-pass.png" width="320" alt="Boarding pass with its QR code and seat" />
+<img src="screenshots/09-boarding-pass.png" width="320" alt="Boarding pass with its QR code, a Download QR code button, and the operator, route, passenger and seat" />
 
-The QR is issued only after payment, and it is signed server-side. The app
+Every confirmed booking has its own boarding QR, and **Download QR code** saves
+it as an image with the reference, trip, date, passengers and seats printed
+beneath — so a person who booked for someone else can send it to them, and they
+show it at the door without the app. Only the booking's owner can obtain it, and
+it boards once. The QR is issued only after payment, and it is signed server-side. The app
 cannot mint one, and a scanner cannot be talked into accepting one it did not
 verify — the signature is checked at the door against the trip being boarded,
 not just for being well-formed.
@@ -153,8 +181,11 @@ not just for being well-formed.
 <img src="screenshots/11-rewards.png" width="320" alt="Loyalty points balance and reward catalogue" />
 
 The balance and its ledger are written together or not at all. Points are
-awarded when a trip is **completed**, not when it is paid for — paying is not
-travelling.
+**one per ₱100 actually paid**, in whole points — a ₱250 booking earns 2 —
+credited the moment the payment goes through, whichever way it was paid. Each
+booking earns once however many times its payment is confirmed, and a refund
+takes the points back. The seeded passenger's 7 points are the ₱700 booking
+above.
 
 ### Tracking, emergencies, discounts, notifications
 
@@ -164,6 +195,17 @@ travelling.
 Tracking follows the bus while the trip is running. Position comes from the
 assigned driver's phone and only theirs, so the marker cannot jump between two
 devices.
+
+<img src="screenshots/16-sos-sent.png" width="320" alt="An emergency alert sent, listed under Your alerts with its location" />
+
+**Send SOS** reads the phone's location — giving up after 12 seconds and falling
+back to the last known fix rather than spinning forever indoors — and alerts
+everyone who can act on it: the operator running the trip, the driver and crew
+rostered on it, and every admin, each by notification and push. The passenger
+is told the alert was sent and nothing more; the app does not say help is
+coming until a responder has said so. Pressing again while it is open does not
+raise a second alert. This run sent one for real, so the operator, driver and
+admin screens below show it.
 
 <a id="discounts"></a>
 
@@ -193,6 +235,15 @@ operator **inside the view**, never by a filter the caller has to remember.
 Today's figures, aggregated server-side. The on-time percentage is `null` until
 something has actually departed rather than a confident 100%, and an uncrewed
 departure is called out as a warning.
+
+<img src="screenshots/20b-operator-sos-alert.png" width="900" alt="An open emergency alert on the operator dashboard: passenger name, trip, coach, route, location, and Call passenger, Open map, Acknowledge, Responding and Resolve" />
+
+Further down, the passenger's alert from above: who raised it, the trip, coach
+and route it concerns, where they were, and one tap to **call them** or **open
+the spot on a map**. The name and phone number come from a view that shows them
+only for alerts this operator may respond to — a rival operator sees nothing,
+and neither does any other passenger. Acknowledge, Responding and Resolve move
+it along, and each step appears on the passenger's own screen.
 
 ### Schedule
 
@@ -305,6 +356,11 @@ passenger reaching for the same seat produce one ticket.
 
 <img src="screenshots/30-admin-overview.png" width="900" alt="Platform overview with cross-operator totals" />
 
+Every open emergency alert on the platform sits at the top — including any raised
+by a passenger who is not on a trip, which has no operator to route it to and
+which only admins can see. (This run's alert was on a Cherry Bus trip, so here it
+appears as the operator's does above.)
+
 Platform-wide totals, and the same figures broken out per operator. The admin's
 revenue figure for a company is asserted equal to what that company sees on its
 own dashboard, so the two consoles cannot drift apart about money.
@@ -380,7 +436,10 @@ nobody waits forever — keep it.
 <img src="screenshots/40-driver-duty.png" width="320" alt="Driver's trips ordered by status: departed first, then scheduled, then arrived" />
 
 Deliberately separate from the operator console: crew must not see revenue and
-fleet. They see their own assignments and nothing else.
+fleet. They see their own assignments and nothing else — and, above them, any
+emergency alert raised on their trips. The crew are the nearest help there is,
+so the passenger's alert from the first journey is at the top of this screen,
+with the same Call and map buttons the operator has.
 
 The list is ordered by **what needs doing**, not by the calendar: the trip being
 driven first, then boarding, then scheduled (soonest first), then arrived — which
@@ -393,8 +452,9 @@ The trip lifecycle — open boarding, start, end — and position sharing, which
 off until the trip starts. Each step is idempotent: a retry after a dropped
 connection does not move a timestamp that was already recorded.
 
-Ending a trip is what completes the boarded passengers' bookings and awards
-their loyalty points.
+Ending a trip is what completes the boarded passengers' bookings. Their loyalty
+points were already credited when they paid; ending the trip checks and finds
+nothing left to award.
 
 <img src="screenshots/42-driver-scan.png" width="320" alt="Door scanner in the crew app" />
 
@@ -427,7 +487,10 @@ nobody can reach is worse than no screenshot.
 The shot list is [`scripts/walkthrough-steps.mjs`](../scripts/walkthrough-steps.mjs),
 written to read like this document. A broken step prints `!!` with its reason
 and the rest carry on, so one bad selector costs one picture rather than
-thirty-eight.
+forty-two. It also clicks both **Download QR code** buttons and checks a real
+PNG arrives. The run sends one real SOS (Chrome is given a fixed location near Roxas),
+so run it after `pnpm db:reset`, not before something else that expects no open
+alerts.
 
 ```bash
 WALKTHROUGH_ONLY=operator pnpm docs:screens
