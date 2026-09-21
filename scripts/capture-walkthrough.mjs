@@ -25,6 +25,7 @@
 
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 const APP = process.env.WALKTHROUGH_URL ?? 'http://localhost:8090';
@@ -126,6 +127,27 @@ class Page {
   async allowLocation({ latitude, longitude }) {
     await rpc(this.ws, 'Browser.grantPermissions', { origin: APP, permissions: ['geolocation'] });
     await this.send('Emulation.setGeolocationOverride', { latitude, longitude, accuracy: 20 });
+  }
+
+  /**
+   * Clicks a download button and waits for the file to land, so the walkthrough
+   * proves the download works rather than only that a button is drawn.
+   * Returns the saved file's name and size.
+   */
+  async download(buttonText, timeoutMs = 15_000) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'palago-download-'));
+    await rpc(this.ws, 'Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: dir });
+    await this.click(buttonText);
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const done = fs.readdirSync(dir).filter((f) => !f.endsWith('.crdownload'));
+      if (done.length > 0) {
+        const file = done[0];
+        return { file, bytes: fs.statSync(path.join(dir, file)).size, dir };
+      }
+      await sleep(300);
+    }
+    throw new Error(`No file downloaded after clicking "${buttonText}"`);
   }
 
   /** Scrolls the first element containing some text to the top of the view. */

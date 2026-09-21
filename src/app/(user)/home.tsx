@@ -287,10 +287,18 @@ export default function HomeScreen() {
               className="py-4"
             />
           ) : (
-            <View className="flex-row gap-3">
+            // Scrolls sideways once there are more operators than fit: squeezed
+            // into one row, five of them became columns a word wide. A fixed
+            // card width keeps them readable at any count; the row still
+            // stretches every card to the tallest, so they stay level.
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerClassName="gap-3 pr-1"
+              accessibilityLabel="Operators">
               {operators.data.map((operator) => (
-                // `flex-1`, never `h-full`: the row stretches each card to the
-                // tallest sibling and flex-1 fills that, whereas `height: 100%`
+                // A fixed width, never `h-full`: the row stretches each card to
+                // the tallest sibling on its own, whereas `height: 100%`
                 // is a percentage of a parent with no definite height inside a
                 // ScrollView — harmless on web, resolved against the scroll
                 // viewport by Yoga, which made each card screen-tall in the APK.
@@ -306,7 +314,7 @@ export default function HomeScreen() {
                       params: { operator: operator.code },
                     })
                   }
-                  className="flex-1 gap-2 active:bg-primary-soft">
+                  className="w-40 gap-2 active:bg-primary-soft">
                     <View className="h-9 w-9 items-center justify-center rounded-full bg-primary-soft">
                       {operator.code === 'RORO' ? (
                         <Ship size={18} color={Colors.primary} />
@@ -314,13 +322,15 @@ export default function HomeScreen() {
                         <Bus size={18} color={Colors.primary} />
                       )}
                     </View>
-                    <Text variant="bodyStrong">{operator.name}</Text>
+                    <Text variant="bodyStrong" numberOfLines={2}>
+                      {operator.name}
+                    </Text>
                     <Text variant="caption" tone="muted" numberOfLines={2}>
                       {operator.description ?? 'View available trips'}
                     </Text>
                 </Card>
               ))}
-            </View>
+            </ScrollView>
           )}
         </View>
 

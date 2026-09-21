@@ -1,6 +1,8 @@
 import { View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
+import { QrDownloadButton } from '@/components/payment/qr-download-button';
+import { useQrPng } from '@/components/payment/use-qr-png';
 import { Text } from '@/components/ui/text';
 import { Colors } from '@/constants/theme';
 import { cn } from '@/utils/cn';
@@ -10,6 +12,8 @@ export interface PaymentQRProps {
   value: string;
   size?: number;
   className?: string;
+  /** Offer "Download QR code". The reference is printed under the saved code. */
+  download?: { filename: string; lines: string[] };
 }
 
 /**
@@ -24,7 +28,9 @@ export interface PaymentQRProps {
  * without PalaGo installed — which is the point, since the payer may be using
  * someone else's phone.
  */
-export function PaymentQR({ value, size = 220, className }: PaymentQRProps) {
+export function PaymentQR({ value, size = 220, className, download }: PaymentQRProps) {
+  const { getRef, getPngBase64 } = useQrPng();
+
   return (
     <View
       accessible
@@ -39,10 +45,20 @@ export function PaymentQR({ value, size = 220, className }: PaymentQRProps) {
         // Medium error correction: still scannable off a slightly dirty or
         // angled screen without making the pattern needlessly dense.
         ecl="M"
+        getRef={getRef}
       />
       <Text variant="caption" tone="muted" className="text-center">
         Scan with any phone camera
       </Text>
+      {download ? (
+        <QrDownloadButton
+          value={value}
+          filename={download.filename}
+          title="PalaGo payment QR"
+          lines={download.lines}
+          getPngBase64={getPngBase64}
+        />
+      ) : null}
     </View>
   );
 }

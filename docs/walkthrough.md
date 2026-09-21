@@ -108,15 +108,34 @@ travel on one booking, and they are booked in a single transaction: either
 everybody gets a seat or nobody does, so a family is never split across two
 buses by a half-finished checkout.
 
-The passenger *type* here is a claim, not a discount. Selecting SENIOR does not
-reduce the fare — a verified discount comes from an approved ID, which is
-[a separate flow](#discounts).
+Every passenger starts as **Regular / Adult**, and a regular passenger is asked
+for nothing more.
+
+<img src="screenshots/06b-student-id-photo.png" width="320" alt="Passenger type set to Student, with the Student ID photo panel and its Upload ID picture button" />
+
+Change the type to Student, Senior citizen or PWD and an **Upload ID picture**
+panel appears for that passenger — and disappears, taking the photo with it, if
+the type is changed back. This is what lets someone book for somebody else:
+Person A books for Person B, a student, and attaches B's school ID from their own
+phone. The photo gives that passenger 20% off the fare at booking, and the crew
+compare it with the real card at the door, where the scan says **Check student
+ID** and opens the photo. The server checks every photo before it prices
+anything — it must be the booker's own upload, an image, at most 5 MB, on a
+discounted passenger — and only the booker, the trip's crew and operator, and
+admins can see it. A booker whose own account ID is already verified is not asked
+again for themselves.
 
 ### Paying
 
-<img src="screenshots/07-payment.png" width="320" alt="Payment screen: seats reserved, ten-minute timer, amount to pay, and a wallet balance too low to cover it" />
+<img src="screenshots/07-payment.png" width="320" alt="Payment screen: base fare, discount, ₱10 convenience fee and amount to pay, with a ten-minute timer" />
 
-Two things on this screen are worth reading twice.
+What the booking costs is laid out before anything is paid: **base fare,
+discount, convenience fee, total**. The ₱10.00 convenience fee is on every
+booking — fixed, not a percentage, and never reduced by a discount or a reward —
+and it is stored as its own figure on the booking, the payment and the receipt.
+Every line comes from the booking the server priced; the screen adds nothing up.
+
+Two more things on this screen are worth reading twice.
 
 **"Seats — Assigned after payment."** Capacity is held for ten minutes, but the
 actual seat numbers are not handed out until the money has cleared. That is
@@ -128,8 +147,13 @@ go back on sale. Nothing about it is decided by the app — the expiry is on the
 row in the database.
 
 The wallet option is offered but disabled, with the shortfall spelled out
-(`₱210.00 · ₱490.00 short`) rather than a greyed-out button that does not say
+(`₱210.00 · ₱500.00 short`) rather than a greyed-out button that does not say
 why.
+
+<img src="screenshots/07b-payment-qr.png" width="320" alt="Payment QR code with a Download QR code button, the time left to pay and the amount" />
+
+**Download QR code** saves the payment code as an image — on a phone it opens
+the share sheet — so it can be paid from another device or by someone else.
 
 Paying by QR opens a payment page in a browser with no PalaGo session — the
 token in the QR is the entire credential, and the page is deliberately narrow:
@@ -140,9 +164,13 @@ passenger or their other bookings.
 
 <img src="screenshots/08-tickets.png" width="320" alt="My tickets: upcoming and past bookings" />
 
-<img src="screenshots/09-boarding-pass.png" width="320" alt="Boarding pass with its QR code and seat" />
+<img src="screenshots/09-boarding-pass.png" width="320" alt="Boarding pass with its QR code, a Download QR code button, and the operator, route, passenger and seat" />
 
-The QR is issued only after payment, and it is signed server-side. The app
+Every confirmed booking has its own boarding QR, and **Download QR code** saves
+it as an image with the reference, trip, date, passengers and seats printed
+beneath — so a person who booked for someone else can send it to them, and they
+show it at the door without the app. Only the booking's owner can obtain it, and
+it boards once. The QR is issued only after payment, and it is signed server-side. The app
 cannot mint one, and a scanner cannot be talked into accepting one it did not
 verify — the signature is checked at the door against the trip being boarded,
 not just for being well-formed.
@@ -459,7 +487,8 @@ nobody can reach is worse than no screenshot.
 The shot list is [`scripts/walkthrough-steps.mjs`](../scripts/walkthrough-steps.mjs),
 written to read like this document. A broken step prints `!!` with its reason
 and the rest carry on, so one bad selector costs one picture rather than
-forty. The run sends one real SOS (Chrome is given a fixed location near Roxas),
+forty-two. It also clicks both **Download QR code** buttons and checks a real
+PNG arrives. The run sends one real SOS (Chrome is given a fixed location near Roxas),
 so run it after `pnpm db:reset`, not before something else that expects no open
 alerts.
 

@@ -98,7 +98,13 @@ export default function PaymentQRScreen() {
       ) : (
         <>
           <View className="mt-4 items-center">
-            <PaymentQR value={p.paymentUrl} />
+            <PaymentQR
+              value={p.paymentUrl}
+              download={{
+                filename: `palago-payment-${b.reference}`,
+                lines: [`Booking ${b.reference}`, `Amount to pay ${formatMoney(b.totalAmount)}`],
+              }}
+            />
           </View>
 
           <View className="mt-4 items-center gap-1">

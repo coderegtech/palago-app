@@ -81,6 +81,10 @@ export interface ScanPassenger {
   type: PassengerType;
   /** Set once this passenger has boarded; a booking can be partly boarded. */
   boardedAt: string | null;
+  /** Travels on a senior/student/PWD discount: the crew must check the real ID. */
+  idCheck?: boolean;
+  /** The ID photo attached when booking, if one was. */
+  proofPath?: string | null;
 }
 
 /**

@@ -19,6 +19,9 @@ import { loadVerifyEnv } from './_verify-env.mjs';
 import { makeInvoke } from './_verify-invoke.mjs';
 
 const { url: URL_, key: KEY } = loadVerifyEnv();
+
+// The fixed convenience fee on every booking (convenience_fee(), 20260921000042).
+const FEE = 1_000;
 const PASSWORD = 'PalawanGo2026';
 
 const client = () => createClient(URL_, KEY, { auth: { persistSession: false } });
@@ -215,7 +218,7 @@ console.log('\nDashboard numbers track reality');
     );
     check(
       'revenue rose by the fare x 2',
-      after.revenue === (before?.revenue ?? 0) + trip.fare * 2,
+      after.revenue === (before?.revenue ?? 0) + trip.fare * 2 + FEE,
       `${before?.revenue} -> ${after.revenue}, fare ${trip.fare}`,
     );
     check(

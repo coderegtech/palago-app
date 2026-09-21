@@ -446,6 +446,8 @@ Scope moves between phases are recorded here rather than left implicit.
 
 | Moved | From → To | Reason |
 |---|---|---|
+| Discount on an ID photo, checked at boarding | 13/10 → changed | Requested: book for another person (a student, a senior) and attach their ID. Before, a discount needed the booker's account approved by an operator first. Now a photo on the passenger line discounts at booking, and the door scan flags the passenger for an ID check. A convincing fake photo travels discounted until the door |
+| ₱10 convenience fee | new | Fixed per booking, stored separately on booking, payment and receipt. Counted in operator revenue as collected — whether it should be split out as platform revenue is undecided |
 | Loyalty earned on payment, not on travel | 10 → changed | Requested: one point per ₱100 paid, credited on payment. Phase 10 had credited on trip completion at one per ₱10. A no-show now keeps the points for a seat they paid for; a refund reverses them |
 | `profiles` table, role enum, RLS | 3 → 2 | Authentication needs somewhere to put a person |
 | Operator account screen | 7 → 2 | Phase 2 owns sign-out; an operator who cannot sign out is a broken build |

@@ -5,7 +5,7 @@ import { Divider } from '@/components/ui/divider';
 import { Text } from '@/components/ui/text';
 import type { Centavos } from '@/types/models';
 import { formatDate, formatTime } from '@/utils/datetime';
-import { formatMoney } from '@/utils/money';
+import { PriceBreakdown } from '@/components/payment/price-breakdown';
 
 export interface ReceiptCardProps {
   receiptNumber: string;
@@ -20,6 +20,8 @@ export interface ReceiptCardProps {
   subtotal: Centavos;
   discount: Centavos;
   loyaltyDiscount: Centavos;
+  /** The fixed convenience fee inside `total`. */
+  convenienceFee: Centavos;
   total: Centavos;
   paymentMethod: string;
   issuedAt: string;
@@ -82,22 +84,14 @@ export function ReceiptCard(props: ReceiptCardProps) {
 
       <Divider />
 
-      <View className="gap-2">
-        <Line label="Subtotal" value={formatMoney(props.subtotal)} />
-        {props.discount > 0 ? (
-          <Line label="Discount" value={`−${formatMoney(props.discount)}`} />
-        ) : null}
-        {props.loyaltyDiscount > 0 ? (
-          <Line label="Loyalty discount" value={`−${formatMoney(props.loyaltyDiscount)}`} />
-        ) : null}
-      </View>
-
-      <View className="flex-row items-end justify-between border-t border-border pt-2">
-        <Text variant="bodyStrong">TOTAL</Text>
-        <Text variant="title" tone="primary">
-          {formatMoney(props.total)}
-        </Text>
-      </View>
+      <PriceBreakdown
+        subtotal={props.subtotal}
+        discount={props.discount}
+        loyaltyDiscount={props.loyaltyDiscount}
+        convenienceFee={props.convenienceFee}
+        totalAmount={props.total}
+        totalLabel="Total paid"
+      />
 
       <Divider />
 

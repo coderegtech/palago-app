@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+
 import { View } from 'react-native';
 import { CheckCircle2, QrCode } from 'lucide-react-native';
 
@@ -16,6 +17,7 @@ import { useReceipt } from '@/hooks/use-payments';
 import { useBookingDetail } from '@/hooks/use-trips';
 import { qrService } from '@/services/qr-service';
 import { formatMoney } from '@/utils/money';
+import { formatDateShort, formatTime } from '@/utils/datetime';
 
 export default function ConfirmationScreen() {
   const { bookingId } = useLocalSearchParams<{ bookingId: string }>();
@@ -98,6 +100,7 @@ export default function ConfirmationScreen() {
             subtotal={b.subtotal}
             discount={b.discount}
             loyaltyDiscount={b.loyaltyDiscount}
+            convenienceFee={b.convenienceFee}
             total={b.totalAmount}
             paymentMethod={receipt.data.paymentMethod}
             issuedAt={receipt.data.issuedAt}
@@ -139,6 +142,8 @@ export default function ConfirmationScreen() {
             originCode={b.originCode}
             destinationCode={b.destinationCode}
             boardedAt={b.boardedAt}
+            departureLabel={`${formatDateShort(b.departureDate)} · ${formatTime(b.departureTime)}`}
+            downloadable
           />
         )}
       </View>

@@ -19,7 +19,7 @@ import { Colors } from '@/constants/theme';
 import { useConfirmPayment, usePublicPayment } from '@/hooks/use-payments';
 import { AppError } from '@/lib/errors';
 import { formatDate, formatTime } from '@/utils/datetime';
-import { formatMoney } from '@/utils/money';
+import { PriceBreakdown } from '@/components/payment/price-breakdown';
 
 /**
  * PalaGo test payment page — the target of the payment QR.
@@ -237,41 +237,15 @@ export default function PaymentPage() {
 
         <Divider />
 
-        <View className="gap-2">
-          <View className="flex-row justify-between">
-            <Text variant="body" tone="muted">
-              Subtotal
-            </Text>
-            <Text variant="bodyStrong">{formatMoney(p.subtotal)}</Text>
-          </View>
-          {p.discount > 0 ? (
-            <View className="flex-row justify-between">
-              <Text variant="body" tone="muted">
-                Discount
-              </Text>
-              <Text variant="bodyStrong" tone="success">
-                −{formatMoney(p.discount)}
-              </Text>
-            </View>
-          ) : null}
-          {p.loyaltyDiscount > 0 ? (
-            <View className="flex-row justify-between">
-              <Text variant="body" tone="muted">
-                Loyalty discount
-              </Text>
-              <Text variant="bodyStrong" tone="success">
-                −{formatMoney(p.loyaltyDiscount)}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-
-        <View className="flex-row items-end justify-between border-t border-border pt-3">
-          <Text variant="bodyStrong">TOTAL</Text>
-          <Text variant="display" tone="primary">
-            {formatMoney(p.totalAmount)}
-          </Text>
-        </View>
+        <PriceBreakdown
+          subtotal={p.subtotal}
+          discount={p.discount}
+          loyaltyDiscount={p.loyaltyDiscount}
+          // Absent from a database that predates the fee.
+          convenienceFee={p.convenienceFee ?? 0}
+          totalAmount={p.totalAmount}
+          totalLabel="Total amount"
+        />
       </Card>
 
       {confirmError ? (
@@ -309,6 +283,7 @@ export default function PaymentPage() {
             subtotal={p.subtotal}
             discount={p.discount}
             loyaltyDiscount={p.loyaltyDiscount}
+            convenienceFee={p.convenienceFee}
             total={p.totalAmount}
             paymentMethod={receipt.paymentMethod}
             issuedAt={receipt.issuedAt}

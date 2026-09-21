@@ -34,6 +34,7 @@ import { fail, failFromRpc, handleOptions, ok, serve } from '../_shared/http.ts'
 import { log } from '../_shared/log.ts';
 
 const PROOF_BUCKET = 'discount-proofs';
+const PASSENGER_PROOF_BUCKET = 'passenger-proofs';
 /** Storage `remove` takes a batch; keep each call comfortably small. */
 const REMOVE_BATCH = 100;
 
@@ -87,45 +88,56 @@ serve('reset-data', async (request) => {
     if (error) return failFromRpc(error);
 
     const result = data as ResetResult;
-    const paths = result.proofPaths ?? [];
 
-    let filesRemoved = 0;
-    const filesFailed: string[] = [];
+    // Every passenger ID photo, attached to a booking or left behind by an
+    // abandoned checkout. Listed after the commit, as the admin: the bookings
+    // that pointed at them are already gone.
+    const { data: passengerPaths, error: listError } = await asCaller.rpc('passenger_proof_objects');
+    if (listError) {
+      log.error('passenger_proofs_not_listed_after_reset', { committed: true, message: listError.message });
+    }
 
-    if (paths.length > 0) {
-      const asService = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
-        auth: { autoRefreshToken: false, persistSession: false },
-      });
+    const asService = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
+    // Government IDs, both buckets. The database reset has committed and cannot
+    // be undone from here, so a file that will not delete is reported, loudly,
+    // rather than folded into a clean success.
+    async function removeAll(bucket: string, paths: string[]) {
+      let removed = 0;
+      const failed: string[] = [];
       for (let i = 0; i < paths.length; i += REMOVE_BATCH) {
         const batch = paths.slice(i, i + REMOVE_BATCH);
-        const { data: removed, error: removeError } = await asService.storage
-          .from(PROOF_BUCKET)
-          .remove(batch);
-        if (removeError) {
-          filesFailed.push(...batch);
-        } else {
-          filesRemoved += removed?.length ?? 0;
-        }
+        const { data: gone, error: removeError } = await asService.storage.from(bucket).remove(batch);
+        if (removeError) failed.push(...batch);
+        else removed += gone?.length ?? 0;
       }
-
-      if (filesFailed.length > 0) {
-        // The database reset has committed and cannot be undone from here.
-        // Say so plainly rather than reporting a clean success.
+      if (failed.length > 0) {
         log.error('proof_files_not_removed_after_reset', {
           committed: true,
-          bucket: PROOF_BUCKET,
-          count: filesFailed.length,
-          paths: filesFailed,
+          bucket,
+          count: failed.length,
+          paths: failed,
           action: 'delete these files by hand',
         });
       }
+      return { removed, failed: failed.length };
     }
+
+    const accountProofs = await removeAll(PROOF_BUCKET, result.proofPaths ?? []);
+    const passengerProofs = await removeAll(
+      PASSENGER_PROOF_BUCKET,
+      (passengerPaths as string[] | null) ?? [],
+    );
+    const filesRemoved = accountProofs.removed + passengerProofs.removed;
+    const filesFailedCount =
+      accountProofs.failed + passengerProofs.failed + (listError ? 1 : 0);
 
     return ok({
       deleted: result.deleted,
       resetAt: result.resetAt,
-      proofFiles: { removed: filesRemoved, failed: filesFailed.length },
+      proofFiles: { removed: filesRemoved, failed: filesFailedCount },
     });
   }
 

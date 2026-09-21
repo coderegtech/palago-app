@@ -36,6 +36,7 @@ import { Select } from '@/components/ui/select';
 import { EmptyState, ErrorState, Loading } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
 import { BoardingPass } from '@/components/payment/boarding-pass';
+import { PriceBreakdown } from '@/components/payment/price-breakdown';
 import { PassengerType } from '@/constants/enums';
 import { passengersFormSchema, type PassengersFormInput } from '@/schemas/booking';
 import { Colors } from '@/constants/theme';
@@ -54,6 +55,8 @@ import type { TripSeatView } from '@/services/trip-service';
 import type { TripOverview } from '@/services/operator-service';
 import { formatDateShort, formatTime, todayISO } from '@/utils/datetime';
 import { formatMoney } from '@/utils/money';
+import { passengersMissingIdPhoto } from '@/utils/passenger-proof';
+import { estimateBookingPrice } from '@/utils/pricing';
 
 interface Traveller {
   name: string;
@@ -84,13 +87,14 @@ export default function AssistedBookingScreen() {
     mode: 'onTouched',
     defaultValues: { passengers: [blankTraveller()] },
   });
-  const { control, reset: resetForm } = form;
+  const { control, reset: resetForm, setError } = form;
   const { fields, append, remove } = useFieldArray({ control, name: 'passengers' });
   // `useWatch`, not `watch`: the latter returns a new function identity on every
   // render, which the React Compiler refuses to compile around ("Use of
   // incompatible library") and which the hooks lint rule flags as unmemoizable.
   // Same reason the passenger type uses a Controller rather than watch/setValue.
-  const travellers = useWatch({ control, name: 'passengers' }) ?? [];
+  const watchedTravellers = useWatch({ control, name: 'passengers' });
+  const travellers = useMemo(() => watchedTravellers ?? [], [watchedTravellers]);
   const [seats, setSeats] = useState<TripSeatView[]>([]);
   const [method, setMethod] = useState<PaymentMethod | null>(null);
   const [confirmingCash, setConfirmingCash] = useState(false);
@@ -105,7 +109,15 @@ export default function AssistedBookingScreen() {
 
   const named = travellers.filter((t) => t.name.trim().length > 1);
   const ready = trip !== null && named.length === travellers.length && seats.length === travellers.length;
-  const total = useMemo(() => (trip ? trip.fare * travellers.length : 0), [trip, travellers.length]);
+  // The clerk confirms cash before the server has priced the sale, so this is an
+  // estimate by the server's own rule — and `onSell` refuses to record the
+  // cash if the server's total turns out different. See `estimateBookingPrice`.
+  const price = useMemo(
+    () => (trip ? estimateBookingPrice(trip.fare, travellers) : null),
+    [trip, travellers],
+  );
+  const total = price?.totalAmount ?? 0;
+  const [priceMismatch, setPriceMismatch] = useState<string | null>(null);
 
   function reset() {
     setTrip(null);
@@ -132,6 +144,20 @@ export default function AssistedBookingScreen() {
 
   function onSell() {
     if (!trip || !method) return;
+    setPriceMismatch(null);
+
+    // A walk-in has no account, so every senior, student or PWD passenger
+    // needs their ID photo for the discount.
+    const missing = passengersMissingIdPhoto(named, null);
+    if (missing.length > 0) {
+      for (const index of missing) {
+        setError(`passengers.${index}.proofPath`, {
+          message: 'Take a photo of this passenger’s ID, or change the passenger type.',
+        });
+      }
+      return;
+    }
+
     sell.mutate(
       {
         tripId: trip.id,
@@ -140,12 +166,22 @@ export default function AssistedBookingScreen() {
           phone: t.phone,
           email: t.email,
           type: t.type,
+          proofPath: t.proofPath,
         })),
         seatIds: seats.map((s) => s.seatId),
         source: 'OPERATOR',
       },
       {
         onSuccess: (sale) => {
+          // Never record an amount the clerk did not confirm. The booking stays
+          // unpaid, holds its seats for ten minutes, and releases them itself.
+          if (sale.totalAmount !== total) {
+            setPriceMismatch(
+              `The booking came to ${formatMoney(sale.totalAmount)}, not ${formatMoney(total)}. ` +
+                'Nothing was recorded as paid. Check the passengers and their ID photos, then sell again.',
+            );
+            return;
+          }
           setSold({ bookingId: sale.bookingId, reference: sale.reference });
           takePayment.mutate(
             { bookingId: sale.bookingId, method },
@@ -194,6 +230,10 @@ export default function AssistedBookingScreen() {
             operatorName={operatorName.data ?? ''}
             originCode={trip?.originCode ?? ''}
             destinationCode={trip?.destinationCode ?? ''}
+            departureLabel={
+              trip ? `${formatDateShort(trip.departureDate)} · ${formatTime(trip.departureTime)}` : undefined
+            }
+            downloadable
           />
         )}
 
@@ -416,12 +456,22 @@ export default function AssistedBookingScreen() {
         <Text variant="label" tone="muted">
           Fare
         </Text>
-        <View className="flex-row items-center justify-between">
-          <Text variant="body" tone="muted">
-            {formatMoney(trip.fare)} × {travellers.length}
-          </Text>
-          <Text variant="title">{formatMoney(total)}</Text>
-        </View>
+        <Text variant="caption" tone="muted">
+          {formatMoney(trip.fare)} × {travellers.length}
+        </Text>
+        {price ? (
+          <PriceBreakdown
+            subtotal={price.subtotal}
+            discount={price.discount}
+            loyaltyDiscount={0}
+            convenienceFee={price.convenienceFee}
+            totalAmount={price.totalAmount}
+            totalLabel="To collect"
+          />
+        ) : null}
+        {priceMismatch ? (
+          <Alert tone="warning" title="Amount changed" message={priceMismatch} />
+        ) : null}
 
         <Divider />
 

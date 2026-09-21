@@ -26,6 +26,9 @@ import { loadVerifyEnv } from './_verify-env.mjs';
 import { makeInvoke } from './_verify-invoke.mjs';
 
 const { url: URL_, key: KEY } = loadVerifyEnv();
+
+// The fixed convenience fee on every booking (convenience_fee(), 20260921000042).
+const FEE = 1_000;
 const PASSWORD = 'PalawanGo2026';
 
 const client = () => createClient(URL_, KEY, { auth: { persistSession: false } });
@@ -237,7 +240,8 @@ if (!trip) {
   );
 
   const payment = await payByQr(passenger, booking.bookingId);
-  const expected = Math.floor(booking.totalAmount / 10_000);
+  // Points are for the fare, not the fee.
+  const expected = Math.floor((booking.totalAmount - FEE) / 10_000);
   const afterPaying = await points(passenger);
 
   check(
@@ -303,7 +307,7 @@ if (!trip) {
       invoke('confirm-test-payment', { reference: created.body.data.reference, token: raceToken }),
     ),
   );
-  const raceExpected = Math.floor(raceBooking.totalAmount / 10_000);
+  const raceExpected = Math.floor((raceBooking.totalAmount - FEE) / 10_000);
   check(
     'six simultaneous confirmations credit exactly once',
     (await points(passenger)).points_balance - beforeRace === raceExpected,
@@ -385,7 +389,7 @@ console.log('\nEvery way of paying earns the same');
   check(
     'and earns floor(paid / ₱100) too',
     (await points(other)).points_balance - beforeWallet ===
-      Math.floor(walletBooking.totalAmount / 10_000),
+      Math.floor((walletBooking.totalAmount - FEE) / 10_000),
     `+${(await points(other)).points_balance - beforeWallet}`,
   );
 }
@@ -480,7 +484,7 @@ if (!bookableTrip) {
   ).data;
   check(
     'the booking total actually dropped',
-    bookingRow.total_amount === bookingRow.subtotal - bookingRow.loyalty_discount,
+    bookingRow.total_amount === bookingRow.subtotal - bookingRow.loyalty_discount + FEE,
     JSON.stringify(bookingRow),
   );
   check(
@@ -573,7 +577,7 @@ if (!bookableTrip) {
   ).data;
   check(
     'the booking total is restored',
-    restored.loyalty_discount === 0 && restored.total_amount === restored.subtotal,
+    restored.loyalty_discount === 0 && restored.total_amount === restored.subtotal + FEE,
     JSON.stringify(restored),
   );
 
@@ -672,7 +676,7 @@ if (!bookableTrip) {
     );
     check(
       'the arithmetic still adds up',
-      row.total_amount === row.subtotal - row.loyalty_discount,
+      row.total_amount === row.subtotal - row.loyalty_discount + FEE,
       JSON.stringify(row),
     );
     if (applied.error) check('applying the reward succeeded', false, applied.error.message);

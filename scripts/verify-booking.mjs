@@ -25,6 +25,9 @@ import { createClient } from '@supabase/supabase-js';
 import { loadVerifyEnv } from './_verify-env.mjs';
 
 const { url: URL, key: KEY } = loadVerifyEnv();
+
+// The fixed convenience fee on every booking (convenience_fee(), 20260921000042).
+const FEE = 1_000;
 const PASSWORD = 'PalawanGo2026';
 
 const client = () => createClient(URL, KEY, { auth: { persistSession: false } });
@@ -141,7 +144,7 @@ let firstBookingId;
   );
   check(
     'total is the trip fare, computed server-side',
-    data?.totalAmount === trip.fare,
+    data?.totalAmount === trip.fare + FEE,
     `${data?.totalAmount} vs fare ${trip.fare}`,
   );
 
@@ -163,8 +166,8 @@ let firstBookingId;
   const two = await book(passenger, 2, 'Cruz');
   check(
     'two seats price at fare x 2',
-    two.data?.totalAmount === trip.fare * 2,
-    `${two.data?.totalAmount} vs ${trip.fare * 2}`,
+    two.data?.totalAmount === trip.fare * 2 + FEE,
+    `${two.data?.totalAmount} vs ${trip.fare * 2 + FEE}`,
   );
   check('both passengers are recorded', two.data?.seatCount === 2, String(two.data?.seatCount));
   check('and two seats are held', (await seatsOf(two.data.bookingId)).length === 2);

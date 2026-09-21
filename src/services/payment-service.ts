@@ -106,6 +106,8 @@ export interface PublicPayment {
   subtotal: Centavos;
   discount: Centavos;
   loyaltyDiscount: Centavos;
+  /** 0 on bookings made before the fee existed. */
+  convenienceFee: Centavos;
   totalAmount: Centavos;
   operatorName: string;
   tripNumber: string;

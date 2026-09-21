@@ -29,6 +29,7 @@ import { AppError } from '@/lib/errors';
 import { useUIStore } from '@/stores/ui-store';
 import { countdownUntil, formatDate, formatTime } from '@/utils/datetime';
 import { formatMoney } from '@/utils/money';
+import { PriceBreakdown } from '@/components/payment/price-breakdown';
 
 /** Ticks once a second so the hold countdown stays honest. */
 function useCountdown(expiresAt: string | null) {
@@ -223,37 +224,17 @@ export default function BookingPaymentScreen() {
 
         <Divider />
 
-        {/* The discount is shown as its own line against the subtotal, so the
-            passenger can see what the reward actually did rather than just a
-            smaller number than they expected. */}
-        {b.loyaltyDiscount > 0 ? (
-          <>
-            <View className="flex-row justify-between">
-              <Text variant="body" tone="muted">
-                Subtotal
-              </Text>
-              <Text variant="body">{formatMoney(b.subtotal)}</Text>
-            </View>
-            <View className="flex-row items-center justify-between">
-              <View className="flex-row items-center gap-1.5">
-                <Gift size={14} color={Colors.success} />
-                <Text variant="body" tone="success">
-                  Reward applied
-                </Text>
-              </View>
-              <Text variant="body" tone="success">
-                &minus;{formatMoney(b.loyaltyDiscount)}
-              </Text>
-            </View>
-          </>
-        ) : null}
-
-        <View className="flex-row items-end justify-between">
-          <Text variant="bodyStrong">Amount to pay</Text>
-          <Text variant="title" tone="primary">
-            {formatMoney(b.totalAmount)}
-          </Text>
-        </View>
+        {/* Every line from the booking the server priced — base fare, the
+            senior/student/PWD discount, any reward, the ₱10 convenience fee —
+            so the passenger sees what makes up the amount before paying it. */}
+        <PriceBreakdown
+          subtotal={b.subtotal}
+          discount={b.discount}
+          loyaltyDiscount={b.loyaltyDiscount}
+          convenienceFee={b.convenienceFee}
+          totalAmount={b.totalAmount}
+          totalLabel="Amount to pay"
+        />
       </Card>
 
       {/*

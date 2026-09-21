@@ -64,6 +64,8 @@ export interface CounterPassengerInput {
   /** Optional, like the app's own form. `create_booking` already stores it. */
   email?: string;
   type: PassengerType;
+  /** The passenger's ID photo, for a senior, student or PWD walk-in. */
+  proofPath?: string;
 }
 
 export interface CounterSale {
@@ -128,6 +130,7 @@ export const counterService = {
         // one now — the app's own — and `create_booking` has always read this key.
         email: p.email?.trim() || null,
         type: p.type,
+        proofPath: p.proofPath || null,
       })),
       p_seat_ids: input.seatIds,
       p_walk_in: true,

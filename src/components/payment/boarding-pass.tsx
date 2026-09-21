@@ -3,6 +3,8 @@ import QRCode from 'react-native-qrcode-svg';
 
 import { Badge } from '@/components/ui/badge';
 import { Divider } from '@/components/ui/divider';
+import { QrDownloadButton } from '@/components/payment/qr-download-button';
+import { useQrPng } from '@/components/payment/use-qr-png';
 import { Text } from '@/components/ui/text';
 import { Colors } from '@/constants/theme';
 import { cn } from '@/utils/cn';
@@ -18,6 +20,10 @@ export interface BoardingPassProps {
   destinationCode: string;
   /** Set once the passenger has boarded, so a used pass is obviously used. */
   boardedAt?: string | null;
+  /** Trip date and time, printed on the downloaded image. */
+  departureLabel?: string;
+  /** Offer "Download QR code" — to keep it, or to send it to the passenger. */
+  downloadable?: boolean;
   className?: string;
 }
 
@@ -38,9 +44,12 @@ export function BoardingPass({
   originCode,
   destinationCode,
   boardedAt,
+  departureLabel,
+  downloadable = false,
   className,
 }: BoardingPassProps) {
   const used = Boolean(boardedAt);
+  const { getRef, getPngBase64 } = useQrPng();
 
   return (
     <View
@@ -63,8 +72,27 @@ export function BoardingPass({
           color={Colors.text}
           backgroundColor="#FFFFFF"
           ecl="M"
+          getRef={getRef}
         />
       </View>
+
+      {/* Someone booking for another person sends them this, and they show it
+          at the door. The code only works once, and only for this trip. */}
+      {downloadable && !used ? (
+        <QrDownloadButton
+          value={value}
+          filename={`palago-ticket-${reference}`}
+          title="PalaGo boarding pass"
+          lines={[
+            reference,
+            `${operatorName} · ${originCode} → ${destinationCode}`,
+            ...(departureLabel ? [departureLabel] : []),
+            passengerNames.join(', '),
+            ...(seatNumbers.length ? [`Seat${seatNumbers.length === 1 ? '' : 's'} ${seatNumbers.join(', ')}`] : []),
+          ]}
+          getPngBase64={getPngBase64}
+        />
+      ) : null}
 
       {used ? (
         <Badge label="Already boarded" tone="neutral" />
