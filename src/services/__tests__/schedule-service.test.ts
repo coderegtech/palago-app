@@ -94,6 +94,55 @@ describe('a schedule clash', () => {
   });
 });
 
+describe('a clash that says which resource is occupied', () => {
+  const clash = (resource: string, label: string, hint?: string) =>
+    rpc.mockResolvedValue({
+      data: null,
+      error: {
+        message: ErrorCode.SCHEDULE_CONFLICT,
+        details: 'CHERRY-002',
+        hint: hint ?? JSON.stringify({ resource, label, busyUntil: '2026-09-27T11:00:00' }),
+      },
+    });
+
+  it.each([
+    ['BUS', 'CB-2026-001', 'Bus CB-2026-001 is still assigned to CHERRY-002 until 11:00 AM on Sun, Sep 27.'],
+    ['DRIVER', 'Juan Dela Cruz', 'Driver Juan Dela Cruz is still assigned to CHERRY-002 until 11:00 AM on Sun, Sep 27.'],
+    ['ASSISTANT', 'Ana Reyes', 'Conductor Ana Reyes is still assigned to CHERRY-002 until 11:00 AM on Sun, Sep 27.'],
+  ])('names the %s, the trip and the time', async (resource, label, message) => {
+    clash(resource, label);
+
+    const error = await scheduleService.createTrip(TRIP).catch((e) => e);
+    expect(error).toBeInstanceOf(ScheduleConflictError);
+    expect(error.message).toBe(message);
+    expect(error.clashesWith).toBe('CHERRY-002');
+    expect(error.conflict).toMatchObject({ resource, label });
+  });
+
+  it('reads the hint on crew assignment as well as on create', async () => {
+    clash('DRIVER', 'Juan Dela Cruz');
+
+    const error = await scheduleService.assignCrew('trip-1', { driverId: 'd1' }).catch((e) => e);
+    expect(error.message).toContain('Driver Juan Dela Cruz');
+  });
+
+  it.each([
+    ['not JSON', 'nope'],
+    ['an unknown resource', JSON.stringify({ resource: 'FUEL', label: 'x', busyUntil: '2026-09-27T11:00:00' })],
+    ['missing the time', JSON.stringify({ resource: 'BUS', label: 'CB-1' })],
+    ['a time that is not a timestamp', JSON.stringify({ resource: 'BUS', label: 'CB-1', busyUntil: 'soon' })],
+  ])('falls back to the generic sentence when the hint is %s', async (_label, hint) => {
+    clash('BUS', 'CB-1', hint);
+
+    const error = await scheduleService.createTrip(TRIP).catch((e) => e);
+    expect(error).toBeInstanceOf(ScheduleConflictError);
+    expect(error.message).toBe(
+      'That clashes with CHERRY-002, which has the same bus or crew at that time.',
+    );
+    expect(error.message).not.toContain('undefined');
+  });
+});
+
 describe('every other failure', () => {
   it('is not dressed up as a clash', async () => {
     // The check is `message === 'SCHEDULE_CONFLICT'` exactly. Anything else —

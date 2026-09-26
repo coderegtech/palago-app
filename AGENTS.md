@@ -338,6 +338,20 @@ and [docs/](docs/) for architecture, payment, QR, realtime, security and testing
   two triggers keep the copy honest. The buffer is configuration, which is why `blocked_range` is
   trigger-maintained and not a generated column: a generated column must be IMMUTABLE and cannot
   read a setting.
+- **A finished trip holds its coach and crew until it *actually* finished, not until it was due.**
+  `trips.blocked_range` — what `trips_bus_no_overlap` reads — was stamped from the scheduled times
+  only, so a coach that docked at 10:30 kept "clashing" with an 11:00 departure until its scheduled
+  12:00 + turnaround (CHERRY-002). `trip_blocked_range()` now shortens the window to
+  `actual_arrival_at` once the trip is ARRIVED/COMPLETED, and the stamp trigger fires on `status` and
+  `actual_arrival_at`. Two rules that look like omissions are not: the window only ever *shrinks*
+  (`least`), because a late arrival that widened it would make `end_trip`'s own UPDATE violate the
+  constraint and strand a finished trip on DEPARTED; and ARRIVED trips are **not** filtered out of
+  the constraint, because they did occupy the coach until they docked. Every clash — create, edit,
+  reactivate, crew — is described by `trip_resource_conflict` / `raise_schedule_conflict` (bus, driver
+  or conductor, which trip, until when, in the error's HINT); do not write another lookup. It also
+  reads COMPLETED crew assignments, which no constraint covers. The suite can only set an actual
+  arrival by really ending a trip, so `verify-schedules` scenario 10 builds its timeline backwards
+  from now in Palawan time.
 - **Cancelling or withdrawing a trip must release its crew, not just its coach.** The constraints on
   `trip_assignments` read the assignment's own status, not its trip's, so an assignment left
   ASSIGNED on a cancelled trip goes on blocking that driver for a journey nobody is making. Caught
