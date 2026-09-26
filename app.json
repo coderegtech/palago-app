@@ -84,11 +84,16 @@
       "reactCompiler": true
     },
     "extra": {
-      "router": {},
+      "router": {
+        "asyncRoutes": {
+          "web": true,
+          "default": false
+        }
+      },
       "eas": {
-        "projectId": "e3c53264-1619-4cb7-9b38-c2481f9f8930"
+        "projectId": "02030e49-6943-4c2f-8763-df095a78e9bb"
       }
     },
-    "owner": "coderegtech"
+    "owner": "johnreyguns-team"
   }
 }
