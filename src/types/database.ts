@@ -2534,6 +2534,16 @@ export type Database = {
       }
       prune_bus_locations: { Args: { p_batch_size?: number }; Returns: number }
       public_setting: { Args: { p_key: string }; Returns: string }
+      raise_schedule_conflict: {
+        Args: {
+          p_assistant_id: string
+          p_bus_id: string
+          p_driver_id: string
+          p_exclude_trip_id?: string
+          p_window: unknown
+        }
+        Returns: undefined
+      }
       record_counter_payment: {
         Args: {
           p_booking_id: string
@@ -2676,6 +2686,31 @@ export type Database = {
         Returns: string
       }
       trip_available_seats: { Args: { p_trip_id: string }; Returns: number }
+      trip_blocked_range: {
+        Args: {
+          p_actual_arrival_at: string
+          p_arrival_at: string
+          p_departure_at: string
+          p_status: string
+          p_turnaround_minutes: number
+        }
+        Returns: unknown
+      }
+      trip_resource_conflict: {
+        Args: {
+          p_assistant_id: string
+          p_bus_id: string
+          p_driver_id: string
+          p_exclude_trip_id?: string
+          p_window: unknown
+        }
+        Returns: {
+          busy_until: string
+          label: string
+          resource: string
+          trip_number: string
+        }[]
+      }
       turnaround_minutes: { Args: never; Returns: number }
       unassign_trip_crew: { Args: { p_trip_id: string }; Returns: Json }
       update_bus: {

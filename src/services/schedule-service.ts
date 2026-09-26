@@ -14,6 +14,7 @@
 import { fromRpcError, toAppError, AppError } from '@/lib/errors';
 import { ErrorCode } from '@/constants/errors';
 import { supabase } from '@/lib/supabase';
+import { formatDateShort, formatTime } from '@/utils/datetime';
 import type { Centavos, ISODate, ISOTime, UUID } from '@/types/models';
 
 export interface CreateTripInput {
@@ -32,32 +33,88 @@ export interface UpdateTripInput extends Omit<CreateTripInput, 'operatorId'> {
   tripId: UUID;
 }
 
+/** What was in the way, as `raise_schedule_conflict` reports it in the error's HINT. */
+export interface ScheduleConflictDetail {
+  resource: 'BUS' | 'DRIVER' | 'ASSISTANT';
+  /** Coach number, or the crew member's name. */
+  label: string;
+  /** Wall-clock `YYYY-MM-DDTHH:mm:ss` at which it is free again, turnaround included. */
+  busyUntil: string;
+}
+
+const RESOURCE_NOUN: Record<ScheduleConflictDetail['resource'], string> = {
+  BUS: 'Bus',
+  DRIVER: 'Driver',
+  ASSISTANT: 'Conductor',
+};
+
+/** `2026-09-27T10:30:00` → `10:30 AM on Sun, Sep 27`. Text, never a Date: no zone shift. */
+function formatBusyUntil(busyUntil: string): string | null {
+  const [date, time] = busyUntil.split('T');
+  if (!date || !time) return null;
+  return `${formatTime(time)} on ${formatDateShort(date)}`;
+}
+
 /**
- * A schedule clash, carrying the departure it clashes with.
+ * Reads the HINT. Defensive on purpose: this is an error path, and a hint that
+ * is missing, older than this build, or not the JSON we expect must degrade to
+ * the generic sentence rather than throw and hide the refusal altogether.
+ */
+function parseConflictDetail(hint: string | undefined): ScheduleConflictDetail | null {
+  if (!hint) return null;
+  try {
+    const parsed = JSON.parse(hint) as Partial<ScheduleConflictDetail>;
+    if (
+      parsed &&
+      typeof parsed.label === 'string' &&
+      typeof parsed.busyUntil === 'string' &&
+      parsed.resource &&
+      parsed.resource in RESOURCE_NOUN
+    ) {
+      return parsed as ScheduleConflictDetail;
+    }
+  } catch {
+    // Not ours; fall through.
+  }
+  return null;
+}
+
+/**
+ * A schedule clash, carrying the departure it clashes with and, when the server
+ * says, which coach or crew member is occupied and until when.
  *
  * `AppError` has no room for that, and the trip number is the whole difference
  * between a message somebody can act on and one they cannot.
  */
 export class ScheduleConflictError extends AppError {
   readonly clashesWith: string | null;
+  readonly conflict: ScheduleConflictDetail | null;
 
-  constructor(clashesWith: string | null, cause?: unknown) {
+  constructor(clashesWith: string | null, cause?: unknown, conflict: ScheduleConflictDetail | null = null) {
+    const until = conflict ? formatBusyUntil(conflict.busyUntil) : null;
     super(
       ErrorCode.SCHEDULE_CONFLICT,
-      clashesWith
-        ? `That clashes with ${clashesWith}, which has the same bus or crew at that time.`
-        : undefined,
+      conflict && clashesWith && until
+        ? `${RESOURCE_NOUN[conflict.resource]} ${conflict.label} is still assigned to ${clashesWith} until ${until}.`
+        : clashesWith
+          ? `That clashes with ${clashesWith}, which has the same bus or crew at that time.`
+          : undefined,
       cause,
     );
     this.name = 'ScheduleConflictError';
     this.clashesWith = clashesWith;
+    this.conflict = conflict;
   }
 }
 
-/** PostgREST puts a raised `DETAIL` in `details`. */
-function rpcError(error: { message?: string; details?: string } | null): AppError {
+/** PostgREST puts a raised `DETAIL` in `details` and `HINT` in `hint`. */
+function rpcError(error: { message?: string; details?: string; hint?: string } | null): AppError {
   if (error?.message === ErrorCode.SCHEDULE_CONFLICT) {
-    return new ScheduleConflictError(error.details?.trim() || null, error);
+    return new ScheduleConflictError(
+      error.details?.trim() || null,
+      error,
+      parseConflictDetail(error.hint),
+    );
   }
   return fromRpcError(error);
 }

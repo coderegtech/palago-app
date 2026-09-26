@@ -733,6 +733,271 @@ check(
 );
 
 // ---------------------------------------------------------------------------
+console.log('\nScenario 10: a finished trip releases its coach and crew when it finished');
+// ---------------------------------------------------------------------------
+//
+// The CHERRY-002 regression. A trip ended by the crew stays ARRIVED with an
+// actual arrival time, but its window used to be stamped from the SCHEDULED
+// arrival and never touched again — so a coach that docked at 10:30 went on
+// clashing with a departure at 11:00 until its scheduled 12:00 + turnaround.
+//
+// `end_trip` records `now()` as the actual arrival and there is no way to write
+// another, so this builds the timeline backwards from the present instead: a
+// trip that left four hours ago and was due in four hours, but has just docked.
+// Every time below is an offset from that instant, in Palawan wall-clock time
+// (the zone the schedule is written in), so the run is deterministic whatever
+// hour it is run at. Fresh coaches and crew, so nothing seeded is in the way.
+
+const MANILA_OFFSET_MS = 8 * 3600_000;
+const nowManila = Math.floor((Date.now() + MANILA_OFFSET_MS) / 60_000) * 60_000;
+const at = (minutes) => {
+  const iso = new Date(nowManila + minutes * 60_000).toISOString();
+  return { date: iso.slice(0, 10), time: `${iso.slice(11, 16)}:00` };
+};
+const tripAt = (from, to) => ({
+  p_departure_date: at(from).date,
+  p_departure_time: at(from).time,
+  p_arrival_time: at(to).time,
+});
+
+async function freshBus(tag) {
+  const made = await cherry.supabase.rpc('create_bus', {
+    p_operator_id: cherryId,
+    p_plate_number: `VS${RUN}${tag}`,
+    p_bus_number: `VS-${RUN}-${tag}`,
+    p_capacity: 20,
+  });
+  if (made.error) throw new Error(`could not create a coach: ${made.error.message}`);
+  return { id: made.data.id, number: made.data.busNumber };
+}
+
+const freshBuses = { F1: await freshBus('F1'), F2: await freshBus('F2'), F3: await freshBus('F3'), F4: await freshBus('F4') };
+const finDriver = (
+  await cherry.supabase.rpc('create_crew_member', {
+    p_kind: 'DRIVER',
+    p_name: `Finished Driver ${RUN}`,
+    p_license_number: `FIN-${RUN}`,
+  })
+).data;
+const finConductor = (
+  await cherry.supabase.rpc('create_crew_member', {
+    p_kind: 'ASSISTANT',
+    p_name: `Finished Conductor ${RUN}`,
+  })
+).data;
+
+/** Trips that ended and therefore cannot be cancelled; kept out of `created`. */
+const ended = [];
+
+const finished = await createTrip(cherry, {
+  p_trip_number: `VS-${RUN}-FIN`,
+  p_bus_id: freshBuses.F1.id,
+  ...tripAt(-240, 240),
+});
+check('a trip that left four hours ago, due in four', finished.error === null, finished.error?.message);
+const finishedId = finished.data.id;
+
+const crewedFinished = await cherry.supabase.rpc('assign_trip_crew', {
+  p_trip_id: finishedId,
+  p_driver_id: finDriver.id,
+  p_assistant_id: finConductor.id,
+});
+check('crewed', crewedFinished.error === null, crewedFinished.error?.message);
+
+const started = await cherry.supabase.rpc('start_trip', { p_trip_id: finishedId });
+check('and started', started.error === null, started.error?.message);
+
+// While it is under way the coach is spoken for until the scheduled arrival.
+const whileRunning = await createTrip(cherry, {
+  p_trip_number: `VS-${RUN}-RUN`,
+  p_bus_id: freshBuses.F1.id,
+  ...tripAt(45, 165),
+});
+check(
+  'while it is still out, its coach is occupied until the scheduled arrival',
+  whileRunning.error?.message === 'SCHEDULE_CONFLICT',
+  whileRunning.error?.message ?? 'it succeeded',
+);
+
+const ending = await cherry.supabase.rpc('end_trip', { p_trip_id: finishedId });
+check('it docks', ending.error === null && ending.data?.status === 'ARRIVED', ending.error?.message);
+ended.push(finishedId);
+
+// The window is now the actual arrival plus the turnaround, not 12:00 + 30.
+const { data: finishedRow } = await admin.supabase
+  .from('trips')
+  .select('status, actual_arrival_at, blocked_range')
+  .eq('id', finishedId)
+  .single();
+const windowUpper = /,"?([0-9T: .-]+)"?\)$/.exec(finishedRow.blocked_range)?.[1];
+const upperMs = windowUpper ? Date.parse(`${windowUpper.replace(' ', 'T')}Z`) : NaN;
+const expectedUpperMs = Date.parse(finishedRow.actual_arrival_at) + MANILA_OFFSET_MS + 30 * 60_000;
+check(
+  "its window now ends at the actual arrival plus turnaround, not the schedule's",
+  Math.abs(upperMs - expectedUpperMs) < 60_000,
+  `${finishedRow.blocked_range} (expected ≈ ${new Date(expectedUpperMs).toISOString()})`,
+);
+
+const afterArrival = await createTrip(cherry, {
+  p_trip_number: `VS-${RUN}-AFTER`,
+  p_bus_id: freshBuses.F1.id,
+  ...tripAt(45, 165),
+});
+check(
+  'the coach can be scheduled once it has actually arrived — the CHERRY-002 case',
+  afterArrival.error === null,
+  afterArrival.error?.message ?? '',
+);
+
+const insideBufferAfter = await createTrip(cherry, {
+  p_trip_number: `VS-${RUN}-BUF2`,
+  p_bus_id: freshBuses.F1.id,
+  ...tripAt(10, 20),
+});
+check(
+  'but not inside the turnaround after it docked',
+  insideBufferAfter.error?.message === 'SCHEDULE_CONFLICT',
+  insideBufferAfter.error?.message ?? 'it succeeded',
+);
+
+const beforeArrival = await createTrip(cherry, {
+  p_trip_number: `VS-${RUN}-BEFORE`,
+  p_bus_id: freshBuses.F1.id,
+  ...tripAt(-60, 0),
+});
+check(
+  'and a departure before it docked is still a clash, not waved through',
+  beforeArrival.error?.message === 'SCHEDULE_CONFLICT',
+  beforeArrival.error?.message ?? 'it succeeded',
+);
+check(
+  'which names the finished trip',
+  beforeArrival.error?.details === `VS-${RUN}-FIN`,
+  beforeArrival.error?.details ?? '(no detail)',
+);
+const beforeHint = JSON.parse(beforeArrival.error?.hint || '{}');
+check(
+  'the coach, and when it is free',
+  beforeHint.resource === 'BUS' &&
+    beforeHint.label === freshBuses.F1.number &&
+    typeof beforeHint.busyUntil === 'string',
+  beforeArrival.error?.hint ?? '(no hint)',
+);
+
+// The crew were released by the same event.
+const crewFreeAfter = await createTrip(cherry, {
+  p_trip_number: `VS-${RUN}-CREWOK`,
+  p_bus_id: freshBuses.F2.id,
+  ...tripAt(45, 165),
+});
+const crewedAfter = await cherry.supabase.rpc('assign_trip_crew', {
+  p_trip_id: crewFreeAfter.data.id,
+  p_driver_id: finDriver.id,
+  p_assistant_id: finConductor.id,
+});
+check(
+  'the driver and conductor are free for a departure after it docked',
+  crewedAfter.error === null,
+  crewedAfter.error?.message,
+);
+
+// ... and not for one before it: a finished assignment is still a fact about
+// when that person was out.
+const crewClash = await createTrip(cherry, {
+  p_trip_number: `VS-${RUN}-CREWNO`,
+  p_bus_id: freshBuses.F3.id,
+  ...tripAt(-60, 0),
+});
+const driverBusy = await cherry.supabase.rpc('assign_trip_crew', {
+  p_trip_id: crewClash.data.id,
+  p_driver_id: finDriver.id,
+});
+const driverHint = JSON.parse(driverBusy.error?.hint || '{}');
+check(
+  'but the driver was out until it docked, so an earlier departure is refused',
+  driverBusy.error?.message === 'SCHEDULE_CONFLICT' &&
+    driverBusy.error?.details === `VS-${RUN}-FIN` &&
+    driverHint.resource === 'DRIVER',
+  `${driverBusy.error?.message ?? 'it succeeded'} ${driverBusy.error?.hint ?? ''}`,
+);
+const conductorBusy = await cherry.supabase.rpc('assign_trip_crew', {
+  p_trip_id: crewClash.data.id,
+  p_assistant_id: finConductor.id,
+});
+check(
+  'and so was the conductor',
+  conductorBusy.error?.message === 'SCHEDULE_CONFLICT' &&
+    JSON.parse(conductorBusy.error?.hint || '{}').resource === 'ASSISTANT',
+  `${conductorBusy.error?.message ?? 'it succeeded'} ${conductorBusy.error?.hint ?? ''}`,
+);
+
+// A trip cannot clash with itself.
+const { data: afterRow } = await admin.supabase
+  .from('trips')
+  .select('route_id, bus_id, trip_number, fare')
+  .eq('id', afterArrival.data.id)
+  .single();
+const editSelf = await cherry.supabase.rpc('update_trip', {
+  p_trip_id: afterArrival.data.id,
+  p_route_id: afterRow.route_id,
+  p_bus_id: afterRow.bus_id,
+  p_trip_number: afterRow.trip_number,
+  ...tripAt(50, 170),
+  p_fare: afterRow.fare,
+});
+check('editing a trip within its own window does not clash with itself', editSelf.error === null, editSelf.error?.message);
+
+const editIntoFinished = await cherry.supabase.rpc('update_trip', {
+  p_trip_id: afterArrival.data.id,
+  p_route_id: afterRow.route_id,
+  p_bus_id: afterRow.bus_id,
+  p_trip_number: afterRow.trip_number,
+  ...tripAt(-60, 0),
+  p_fare: afterRow.fare,
+});
+check(
+  'but moving it onto the finished trip still does, and names that trip — not itself',
+  editIntoFinished.error?.message === 'SCHEDULE_CONFLICT' &&
+    editIntoFinished.error?.details === `VS-${RUN}-FIN`,
+  `${editIntoFinished.error?.message ?? 'it succeeded'} / ${editIntoFinished.error?.details ?? ''}`,
+);
+
+// A coach that docks LATE must still be able to end its trip, even with the next
+// departure already booked into the overlap. The window may only shrink.
+const behind = await createTrip(cherry, {
+  p_trip_number: `VS-${RUN}-BEHIND`,
+  p_bus_id: freshBuses.F4.id,
+  ...tripAt(-30, 90),
+});
+const late = await createTrip(cherry, {
+  p_trip_number: `VS-${RUN}-LATE`,
+  p_bus_id: freshBuses.F4.id,
+  ...tripAt(-240, -60),
+});
+check('a trip already overdue, with another booked behind it', late.error === null && behind.error === null,
+  `${late.error?.message ?? ''} ${behind.error?.message ?? ''}`);
+await cherry.supabase.rpc('start_trip', { p_trip_id: late.data.id });
+const lateEnd = await cherry.supabase.rpc('end_trip', { p_trip_id: late.data.id });
+check(
+  'can still be ended — arriving late never widens its window into the next trip',
+  lateEnd.error === null && lateEnd.data?.status === 'ARRIVED',
+  lateEnd.error?.message,
+);
+ended.push(late.data.id);
+// `createTrip` recorded it for cleanup; an ARRIVED trip cannot be cancelled.
+created.splice(created.indexOf(late.data.id), 1);
+created.splice(created.indexOf(finishedId), 1);
+
+// Reference data is never deleted, so the fixtures are stood down instead.
+for (const { id } of Object.values(freshBuses)) {
+  await admin.supabase.rpc('set_bus_status', {
+    p_bus_id: id,
+    p_status: 'INACTIVE',
+    p_reason: 'verify-schedules fixture',
+  });
+}
+
+// ---------------------------------------------------------------------------
 console.log('\nCleaning up');
 // ---------------------------------------------------------------------------
 
@@ -754,7 +1019,7 @@ const { data: leftovers } = await admin.supabase
   .from('trips')
   .select('trip_number')
   .like('trip_number', `VS-${RUN}-%`)
-  .neq('status', 'CANCELLED');
+  .not('status', 'in', '(CANCELLED,ARRIVED,COMPLETED)');
 check('and none is left occupying a coach', (leftovers ?? []).length === 0, JSON.stringify(leftovers));
 
 console.log(`\n${passed} passed, ${failures.length} failed`);
