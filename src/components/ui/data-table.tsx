@@ -160,7 +160,18 @@ export function DataTable<T>({
       className={cn(!embedded && 'flex-1')}
       contentContainerClassName={cn(!embedded && 'grow')}>
       <View style={{ minWidth }} className={cn(!embedded && 'flex-1 px-4 pb-8')}>
-        <View className="overflow-hidden rounded-card border border-border bg-surface">
+        {/*
+          The card must be `flex-1` in full-page mode. Without it the card sizes to
+          its content, so the FlatList inside has no bounded height, never
+          scrolls, and its rows spill past the card and get clipped by the
+          horizontal scroller. On a phone the FlatList is the root and scrolls
+          on its own, which is why only wide screens were stuck.
+        */}
+        <View
+          className={cn(
+            'overflow-hidden rounded-card border border-border bg-surface',
+            !embedded && 'flex-1',
+          )}>
           {embedded ? (
             <>
               {header}

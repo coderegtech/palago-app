@@ -130,7 +130,7 @@ if (opts.target === 'local') {
   URL_ = env.EXPO_PUBLIC_SUPABASE_URL;
   KEY = env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   if (!URL_ || !KEY) throw new Error('--target cloud needs EXPO_PUBLIC_SUPABASE_URL and _PUBLISHABLE_KEY in .env.');
-  if (!process.env.MOCK_ADMIN_EMAIL || !process.env.MOCK_ADMIN_PASSWORD) {
+  if (!adminEmail || !adminPassword) {
     throw new Error('--target cloud needs MOCK_ADMIN_EMAIL and MOCK_ADMIN_PASSWORD (a SUPER_ADMIN on that project).');
   }
   if (!opts.yes) {
