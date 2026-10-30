@@ -49,6 +49,37 @@ reference is in [docs/features.md](docs/features.md).
 | 14 | Testing | **Done** |
 | 15 | Production preparation | **Done** — handset verification of the GPS throttle outstanding |
 
+## Screens
+
+A few of them. The full set — every screen, role by role, with the reasoning behind each —
+is in [docs/walkthrough.md](docs/walkthrough.md). All of these are captured from the running
+app against seeded data by `pnpm docs:screens`, never mocked up.
+
+**Passenger**
+
+<p>
+  <img src="docs/screenshots/02-home.png" width="200" alt="Passenger home screen with wallet, points and upcoming trips" />
+  <img src="docs/screenshots/04-results.png" width="200" alt="Search results showing two Cherry Bus departures with fares and seats left" />
+  <img src="docs/screenshots/07-payment.png" width="200" alt="Payment screen: base fare, discount, the convenience fee and amount to pay, with a ten-minute timer" />
+  <img src="docs/screenshots/09-boarding-pass.png" width="200" alt="Boarding pass with its QR code, and the operator, route, passenger and seat" />
+</p>
+
+**Operator console**
+
+<img src="docs/screenshots/20-operator-dashboard.png" width="900" alt="Operator dashboard: today's passengers, revenue, boarded count and trip statuses" />
+
+**Admin console**
+
+<img src="docs/screenshots/30-admin-overview.png" width="900" alt="Platform overview with cross-operator totals" />
+
+**Driver and crew**
+
+<p>
+  <img src="docs/screenshots/40-driver-duty.png" width="200" alt="Driver's trips ordered by status: departed first, then scheduled, then arrived" />
+  <img src="docs/screenshots/41-driver-trip.png" width="200" alt="One trip: status, position sharing, and the trip lifecycle buttons" />
+  <img src="docs/screenshots/42-driver-scan.png" width="200" alt="Door scanner in the crew app" />
+</p>
+
 ## Tech stack
 
 | Layer | Choice |

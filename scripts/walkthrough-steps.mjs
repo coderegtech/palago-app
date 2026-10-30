@@ -367,7 +367,9 @@ export async function capture(page, { DEVICE, DESKTOP, sleep }) {
   });
 
   await step('driver-trip', async () => {
-    await page.click('PPS');
+    // The badge, not a terminal code: the roster is ordered with the trip being
+    // driven first, and that is the one with lifecycle buttons worth showing.
+    await page.click('DEPARTED');
     await sleep(3000);
     await page.shot('41-driver-trip');
   });

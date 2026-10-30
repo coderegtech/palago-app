@@ -179,9 +179,17 @@ class Page {
         const label = el.placeholder || el.getAttribute('aria-label') || '';
         const own = el.children.length === 0 ? el.textContent : '';
         if (!hit(label) && !hit(own)) continue;
-        const r = el.getBoundingClientRect();
+        let r = el.getBoundingClientRect();
         if (r.width < 4 || r.height < 4) continue;
         if (r.bottom < 0 || r.top > innerHeight) continue;
+        // A half-visible element is accepted on its top edge but clicked at
+        // its centre, which for a tall card at the fold is BELOW the viewport.
+        // CDP dispatches there happily, nothing is hit and nothing is raised —
+        // that silent miss made the driver trip shot a copy of the duty screen.
+        if (r.y + r.height / 2 > innerHeight) {
+          el.scrollIntoView({ block: 'center', behavior: 'instant' });
+          r = el.getBoundingClientRect();
+        }
         return { x: r.x + r.width / 2, y: r.y + r.height / 2, tag: el.tagName };
       }
       return null;
