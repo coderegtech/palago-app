@@ -51,36 +51,36 @@ reference is in [docs/features.md](docs/features.md).
 
 ## Screens
 
-Captured from the running app against seeded data by `pnpm docs:screens` -- signed in and
-clicked through, never mocked up. The full set with the reasoning behind each screen is in
-[docs/walkthrough.md](docs/walkthrough.md).
+Every screen in the app, captured from it running against seeded data by `pnpm docs:screens`
+— signed in and clicked through, never mocked up. The same shots with the reasoning behind
+each one are in [docs/walkthrough.md](docs/walkthrough.md).
 
-### Customer -- booking a seat
+### Customer — booking a seat
 
 |   |   |   |
 | :--: | :--: | :--: |
 | <img src="docs/screenshots/01-sign-in.png" width="230" alt="PalaGo sign-in screen" /><br>**Sign in** | <img src="docs/screenshots/02-home.png" width="230" alt="Passenger home screen with wallet, points and upcoming trips" /><br>**Home** | <img src="docs/screenshots/03-search.png" width="230" alt="Trip search: origin, destination, travel date and passenger count" /><br>**Search** |
 | <img src="docs/screenshots/04-results.png" width="230" alt="Search results showing two Cherry Bus departures with fares and seats left" /><br>**Results** | <img src="docs/screenshots/05-trip-details.png" width="230" alt="Trip details: operator, times, duration, bus and seats available" /><br>**Trip details** | <img src="docs/screenshots/06-passenger-details.png" width="230" alt="Passenger details form: full name, passenger type, mobile and email" /><br>**Who is travelling** |
 
-### Customer -- paying
+### Customer — paying
 
 |   |   |   |
 | :--: | :--: | :--: |
-| <img src="docs/screenshots/06b-student-id-photo.png" width="230" alt="Passenger type set to Student, with the Student ID photo panel and its Upload ID picture button" /><br>**Discount ID** | <img src="docs/screenshots/07-payment.png" width="230" alt="Payment screen: base fare, discount, convenience fee and amount to pay, with a ten-minute timer" /><br>**Payment** | <img src="docs/screenshots/07b-payment-qr.png" width="230" alt="Payment QR code with a Download QR code button, the time left to pay and the amount" /><br>**Payment QR** |
+| <img src="docs/screenshots/06b-student-id-photo.png" width="230" alt="Passenger type set to Student, with the Student ID photo panel and its Upload ID picture button" /><br>**Discount ID** | <img src="docs/screenshots/07-payment.png" width="230" alt="Payment screen: base fare, discount, ₱10 convenience fee and amount to pay, with a ten-minute timer" /><br>**Payment** | <img src="docs/screenshots/07b-payment-qr.png" width="230" alt="Payment QR code with a Download QR code button, the time left to pay and the amount" /><br>**Payment QR** |
 
-### Customer -- travelling
+### Customer — travelling
 
 |   |   |   |
 | :--: | :--: | :--: |
-| <img src="docs/screenshots/08-tickets.png" width="230" alt="My tickets: upcoming and past bookings" /><br>**My tickets** | <img src="docs/screenshots/09-boarding-pass.png" width="230" alt="Boarding pass with its QR code, and the operator, route, passenger and seat" /><br>**Boarding pass** | <img src="docs/screenshots/12-tracking.png" width="230" alt="Live tracking screen" /><br>**Live tracking** |
+| <img src="docs/screenshots/08-tickets.png" width="230" alt="My tickets: upcoming and past bookings" /><br>**My tickets** | <img src="docs/screenshots/09-boarding-pass.png" width="230" alt="Boarding pass with its QR code, a Download QR code button, and the operator, route, passenger and seat" /><br>**Boarding pass** | <img src="docs/screenshots/12-tracking.png" width="230" alt="Live tracking screen" /><br>**Live tracking** |
 
-### Customer -- wallet, rewards and account
+### Customer — wallet, rewards and account
 
 |   |   |   |   |
 | :--: | :--: | :--: | :--: |
 | <img src="docs/screenshots/10-wallet.png" width="175" alt="Wallet balance and transaction ledger" /><br>**Wallet** | <img src="docs/screenshots/11-rewards.png" width="175" alt="Loyalty points balance and reward catalogue" /><br>**Rewards** | <img src="docs/screenshots/14-discount.png" width="175" alt="Fare discount screen for senior, student and PWD verification" /><br>**Fare discount** | <img src="docs/screenshots/15-notifications.png" width="175" alt="Notification feed" /><br>**Notifications** |
 
-### Customer -- emergencies
+### Customer — emergencies
 
 |   |   |
 | :--: | :--: |
@@ -88,17 +88,33 @@ clicked through, never mocked up. The full set with the reasoning behind each sc
 
 ### Operator console
 
-<img src="docs/screenshots/20-operator-dashboard.png" width="900" alt="Operator dashboard: today's passengers, revenue, boarded count and trip statuses" />
+|   |   |
+| :--: | :--: |
+| <img src="docs/screenshots/20-operator-dashboard.png" width="420" alt="Operator dashboard: today's passengers, revenue, boarded count and trip statuses" /><br>**Dashboard** | <img src="docs/screenshots/20b-operator-sos-alert.png" width="420" alt="An open emergency alert on the operator dashboard: passenger name, trip, coach, route, location, and Call passenger, Open map, Acknowledge, Responding and Resolve" /><br>**Emergency alert** |
+| <img src="docs/screenshots/21-operator-schedule.png" width="420" alt="Operator schedule listing departures with coach, crew and status" /><br>**Schedule** | <img src="docs/screenshots/22-schedule-form.png" width="420" alt="The schedule form: route, coach, trip number, date, times and fare" /><br>**New trip** |
+| <img src="docs/screenshots/23-drivers.png" width="420" alt="Driver management showing account status and availability as separate columns" /><br>**Drivers and crew** | <img src="docs/screenshots/24-set-unavailable.png" width="420" alt="Set unavailable dialog explaining that access is kept" /><br>**Set unavailable** |
+| <img src="docs/screenshots/25-operator-fleet.png" width="420" alt="Fleet list with coach numbers, plates, seat counts and road status" /><br>**Fleet** | <img src="docs/screenshots/26-travel-data.png" width="420" alt="Per-trip travel data with occupancy and on-time performance" /><br>**Travel data** |
+| <img src="docs/screenshots/27-scanner.png" width="420" alt="QR boarding scanner" /><br>**Boarding scanner** | <img src="docs/screenshots/28-counter-sale.png" width="420" alt="Counter sale: origin, destination and travel date, then this operator's sellable trips" /><br>**Counter sale** |
+| <img src="docs/screenshots/29-counter-passenger-form.png" width="420" alt="The passenger app's own details card, used at the counter" /><br>**Counter passenger** |   |
 
 ### Admin console
 
-<img src="docs/screenshots/30-admin-overview.png" width="900" alt="Platform overview with cross-operator totals" />
+|   |   |
+| :--: | :--: |
+| <img src="docs/screenshots/30-admin-overview.png" width="420" alt="Platform overview with cross-operator totals" /><br>**Platform overview** | <img src="docs/screenshots/31-admin-operators.png" width="420" alt="Operator management with view, edit, add login and deactivate actions" /><br>**Operators** |
+| <img src="docs/screenshots/32-add-operator-login.png" width="420" alt="Add a login dialog for an operator" /><br>**Add operator login** | <img src="docs/screenshots/33-temporary-password.png" width="420" alt="The temporary password, shown once with a warning" /><br>**Temporary password** |
+| <img src="docs/screenshots/34-admin-schedules.png" width="420" alt="Every departure on the platform, filterable by operator" /><br>**Schedules** | <img src="docs/screenshots/35-admin-crew.png" width="420" alt="Every driver and conductor across all operators" /><br>**Crew** |
+| <img src="docs/screenshots/36-admin-fleet.png" width="420" alt="Every coach across all operators" /><br>**Fleet** | <img src="docs/screenshots/37-admin-routes.png" width="420" alt="Route management" /><br>**Routes** |
+
+|   |
+| :--: |
+| <img src="docs/screenshots/38-forced-password-change.png" width="230" alt="Forced password change on first sign-in" /><br>**Forced password change** |
 
 ### Driver and crew
 
-|   |   |   |
-| :--: | :--: | :--: |
-| <img src="docs/screenshots/40-driver-duty.png" width="230" alt="Driver's trips ordered by status: departed first, then scheduled, then arrived" /><br>**Duty roster** | <img src="docs/screenshots/41-driver-trip.png" width="230" alt="One trip: status, position sharing, and the trip lifecycle buttons" /><br>**Trip lifecycle** | <img src="docs/screenshots/42-driver-scan.png" width="230" alt="Door scanner in the crew app" /><br>**Door scanner** |
+|   |   |   |   |
+| :--: | :--: | :--: | :--: |
+| <img src="docs/screenshots/40-driver-duty.png" width="175" alt="Driver's trips ordered by status: departed first, then scheduled, then arrived" /><br>**Duty roster** | <img src="docs/screenshots/41-driver-trip.png" width="175" alt="One trip: status, position sharing, and the trip lifecycle buttons" /><br>**Trip lifecycle** | <img src="docs/screenshots/42-driver-scan.png" width="175" alt="Door scanner in the crew app" /><br>**Door scanner** | <img src="docs/screenshots/43-driver-availability.png" width="175" alt="Driver's own availability switch on the account screen" /><br>**Availability** |
 
 ## Tech stack
 
