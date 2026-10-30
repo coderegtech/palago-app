@@ -51,34 +51,54 @@ reference is in [docs/features.md](docs/features.md).
 
 ## Screens
 
-A few of them. The full set — every screen, role by role, with the reasoning behind each —
-is in [docs/walkthrough.md](docs/walkthrough.md). All of these are captured from the running
-app against seeded data by `pnpm docs:screens`, never mocked up.
+Captured from the running app against seeded data by `pnpm docs:screens` -- signed in and
+clicked through, never mocked up. The full set with the reasoning behind each screen is in
+[docs/walkthrough.md](docs/walkthrough.md).
 
-**Passenger**
+### Customer -- booking a seat
 
-<p>
-  <img src="docs/screenshots/02-home.png" width="200" alt="Passenger home screen with wallet, points and upcoming trips" />
-  <img src="docs/screenshots/04-results.png" width="200" alt="Search results showing two Cherry Bus departures with fares and seats left" />
-  <img src="docs/screenshots/07-payment.png" width="200" alt="Payment screen: base fare, discount, the convenience fee and amount to pay, with a ten-minute timer" />
-  <img src="docs/screenshots/09-boarding-pass.png" width="200" alt="Boarding pass with its QR code, and the operator, route, passenger and seat" />
-</p>
+|   |   |   |
+| :--: | :--: | :--: |
+| <img src="docs/screenshots/01-sign-in.png" width="230" alt="PalaGo sign-in screen" /><br>**Sign in** | <img src="docs/screenshots/02-home.png" width="230" alt="Passenger home screen with wallet, points and upcoming trips" /><br>**Home** | <img src="docs/screenshots/03-search.png" width="230" alt="Trip search: origin, destination, travel date and passenger count" /><br>**Search** |
+| <img src="docs/screenshots/04-results.png" width="230" alt="Search results showing two Cherry Bus departures with fares and seats left" /><br>**Results** | <img src="docs/screenshots/05-trip-details.png" width="230" alt="Trip details: operator, times, duration, bus and seats available" /><br>**Trip details** | <img src="docs/screenshots/06-passenger-details.png" width="230" alt="Passenger details form: full name, passenger type, mobile and email" /><br>**Who is travelling** |
 
-**Operator console**
+### Customer -- paying
+
+|   |   |   |
+| :--: | :--: | :--: |
+| <img src="docs/screenshots/06b-student-id-photo.png" width="230" alt="Passenger type set to Student, with the Student ID photo panel and its Upload ID picture button" /><br>**Discount ID** | <img src="docs/screenshots/07-payment.png" width="230" alt="Payment screen: base fare, discount, convenience fee and amount to pay, with a ten-minute timer" /><br>**Payment** | <img src="docs/screenshots/07b-payment-qr.png" width="230" alt="Payment QR code with a Download QR code button, the time left to pay and the amount" /><br>**Payment QR** |
+
+### Customer -- travelling
+
+|   |   |   |
+| :--: | :--: | :--: |
+| <img src="docs/screenshots/08-tickets.png" width="230" alt="My tickets: upcoming and past bookings" /><br>**My tickets** | <img src="docs/screenshots/09-boarding-pass.png" width="230" alt="Boarding pass with its QR code, and the operator, route, passenger and seat" /><br>**Boarding pass** | <img src="docs/screenshots/12-tracking.png" width="230" alt="Live tracking screen" /><br>**Live tracking** |
+
+### Customer -- wallet, rewards and account
+
+|   |   |   |   |
+| :--: | :--: | :--: | :--: |
+| <img src="docs/screenshots/10-wallet.png" width="175" alt="Wallet balance and transaction ledger" /><br>**Wallet** | <img src="docs/screenshots/11-rewards.png" width="175" alt="Loyalty points balance and reward catalogue" /><br>**Rewards** | <img src="docs/screenshots/14-discount.png" width="175" alt="Fare discount screen for senior, student and PWD verification" /><br>**Fare discount** | <img src="docs/screenshots/15-notifications.png" width="175" alt="Notification feed" /><br>**Notifications** |
+
+### Customer -- emergencies
+
+|   |   |
+| :--: | :--: |
+| <img src="docs/screenshots/13-sos.png" width="230" alt="Emergency assistance screen" /><br>**Emergency assistance** | <img src="docs/screenshots/16-sos-sent.png" width="230" alt="An emergency alert sent, listed under Your alerts with its location" /><br>**Alert sent** |
+
+### Operator console
 
 <img src="docs/screenshots/20-operator-dashboard.png" width="900" alt="Operator dashboard: today's passengers, revenue, boarded count and trip statuses" />
 
-**Admin console**
+### Admin console
 
 <img src="docs/screenshots/30-admin-overview.png" width="900" alt="Platform overview with cross-operator totals" />
 
-**Driver and crew**
+### Driver and crew
 
-<p>
-  <img src="docs/screenshots/40-driver-duty.png" width="200" alt="Driver's trips ordered by status: departed first, then scheduled, then arrived" />
-  <img src="docs/screenshots/41-driver-trip.png" width="200" alt="One trip: status, position sharing, and the trip lifecycle buttons" />
-  <img src="docs/screenshots/42-driver-scan.png" width="200" alt="Door scanner in the crew app" />
-</p>
+|   |   |   |
+| :--: | :--: | :--: |
+| <img src="docs/screenshots/40-driver-duty.png" width="230" alt="Driver's trips ordered by status: departed first, then scheduled, then arrived" /><br>**Duty roster** | <img src="docs/screenshots/41-driver-trip.png" width="230" alt="One trip: status, position sharing, and the trip lifecycle buttons" /><br>**Trip lifecycle** | <img src="docs/screenshots/42-driver-scan.png" width="230" alt="Door scanner in the crew app" /><br>**Door scanner** |
 
 ## Tech stack
 
